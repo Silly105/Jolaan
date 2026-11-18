@@ -5,12 +5,16 @@ namespace App\Modules\Admin;
 
 use App\Core\Auth;
 use App\Core\Database;
+use App\Core\Theme;
+use App\Core\Version;
 
 class AdminLayout
 {
     public static function renderLogin(string $error = ''): void
     {
-        $siteTitle = (string)Database::getSetting('site_title', 'Con-Management');
+        $siteTitle  = (string)Database::getSetting('site_title', 'Con-Management');
+        $faviconUrl = (string)Database::getSetting('site_favicon', '');
+        $palette    = Theme::getAdminPalette();
         ?>
         <!DOCTYPE html>
         <html lang="de">
@@ -18,12 +22,22 @@ class AdminLayout
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Orga-Login – <?= e($siteTitle) ?></title>
+            <?php if ($faviconUrl !== ''): ?>
+                <link rel="icon" href="<?= e($faviconUrl) ?>">
+            <?php endif; ?>
             <style>
+                :root {
+                    --adm-sidebar: <?= e($palette['sidebar_bg']) ?>;
+                    --adm-sidebar-dark: <?= e($palette['sidebar_dark']) ?>;
+                    --adm-accent: <?= e($palette['accent']) ?>;
+                    --adm-accent-hover: <?= e($palette['accent_hover']) ?>;
+                    --adm-accent-border: <?= e($palette['accent_border']) ?>;
+                }
                 *, *::before, *::after { box-sizing: border-box; }
                 body {
                     margin: 0;
                     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-                    background: #1e2920;
+                    background: var(--adm-sidebar);
                     color: #1e293b;
                     min-height: 100vh;
                     display: flex;
@@ -40,10 +54,10 @@ class AdminLayout
                     overflow: hidden;
                 }
                 .login-header {
-                    background: #243b29;
+                    background: var(--adm-sidebar-dark);
                     color: #ffffff;
                     padding: 1.5rem 1.75rem;
-                    border-bottom: 4px solid #739757;
+                    border-bottom: 4px solid var(--adm-accent-border);
                 }
                 .login-header h1 { margin: 0; font-size: 1.3rem; }
                 .login-header p { margin: 0.25rem 0 0 0; opacity: 0.85; font-size: 0.88rem; }
@@ -57,10 +71,10 @@ class AdminLayout
                     border-radius: 6px;
                     font-size: 0.95rem;
                 }
-                input:focus { outline: none; border-color: #255E00; box-shadow: 0 0 0 3px rgba(37, 94, 0, 0.15); }
+                input:focus { outline: none; border-color: var(--adm-accent); box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.1); }
                 .btn {
                     width: 100%;
-                    background: #255E00;
+                    background: var(--adm-accent);
                     color: #ffffff;
                     border: none;
                     padding: 0.7rem;
@@ -69,7 +83,7 @@ class AdminLayout
                     border-radius: 6px;
                     cursor: pointer;
                 }
-                .btn:hover { background: #1a4300; }
+                .btn:hover { background: var(--adm-accent-hover); }
                 .err {
                     background: #fef2f2;
                     border: 1px solid #f87171;
@@ -79,14 +93,14 @@ class AdminLayout
                     margin-bottom: 1rem;
                     font-size: 0.9rem;
                 }
-                .back-link { display: block; text-align: center; margin-top: 1.25rem; font-size: 0.88rem; color: #255E00; text-decoration: none; }
+                .back-link { display: block; text-align: center; margin-top: 1.25rem; font-size: 0.88rem; color: var(--adm-accent); text-decoration: none; }
             </style>
         </head>
         <body>
             <div class="login-card">
                 <div class="login-header">
                     <h1><?= e($siteTitle) ?></h1>
-                    <p>Orga- & Administrations-Login</p>
+                    <p>Orga- & Administrations-Login (v<?= e(Version::CURRENT) ?>)</p>
                 </div>
                 <div class="login-body">
                     <?php if ($error !== ''): ?>
@@ -96,11 +110,11 @@ class AdminLayout
                         <?= Auth::csrfField() ?>
                         <div class="form-group">
                             <label for="email">E-Mail-Adresse</label>
-                            <input type="email" id="email" name="email" required autofocus>
+                            <input type="email" id="email" name="email" autocomplete="username" required autofocus>
                         </div>
                         <div class="form-group">
                             <label for="password">Passwort</label>
-                            <input type="password" id="password" name="password" required>
+                            <input type="password" id="password" name="password" autocomplete="current-password" required>
                         </div>
                         <button type="submit" class="btn">Anmelden</button>
                     </form>
@@ -114,9 +128,11 @@ class AdminLayout
 
     public static function render(string $title, string $activeModule, string $contentHtml, ?int $activeEventId = null): void
     {
-        $user = Auth::user();
-        $isAdmin = Auth::isAdmin();
-        $siteTitle = (string)Database::getSetting('site_title', 'Con-Management');
+        $user       = Auth::user();
+        $isAdmin    = Auth::isAdmin();
+        $siteTitle  = (string)Database::getSetting('site_title', 'Con-Management');
+        $faviconUrl = (string)Database::getSetting('site_favicon', '');
+        $palette    = Theme::getAdminPalette();
 
         $flashSuccess = $_SESSION['flash_success'] ?? '';
         $flashError   = $_SESSION['flash_error'] ?? '';
@@ -128,14 +144,26 @@ class AdminLayout
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title><?= e($title) ?> – Orga-Backend</title>
+            <?php if ($faviconUrl !== ''): ?>
+                <link rel="icon" href="<?= e($faviconUrl) ?>">
+            <?php endif; ?>
             <style>
+                :root {
+                    --adm-sidebar: <?= e($palette['sidebar_bg']) ?>;
+                    --adm-sidebar-dark: <?= e($palette['sidebar_dark']) ?>;
+                    --adm-accent: <?= e($palette['accent']) ?>;
+                    --adm-accent-hover: <?= e($palette['accent_hover']) ?>;
+                    --adm-accent-border: <?= e($palette['accent_border']) ?>;
+                    --adm-accent-light: <?= e($palette['accent_light']) ?>;
+                    --adm-body-bg: <?= e($palette['body_bg']) ?>;
+                }
                 *, *::before, *::after { box-sizing: border-box; }
                 body {
                     margin: 0;
                     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
                     font-size: 15px;
                     line-height: 1.5;
-                    background: #f1f5f9;
+                    background: var(--adm-body-bg);
                     color: #0f172a;
                     display: flex;
                     min-height: 100vh;
@@ -143,7 +171,7 @@ class AdminLayout
                 /* Sidebar */
                 .sidebar {
                     width: 260px;
-                    background: #1e2e22;
+                    background: var(--adm-sidebar);
                     color: #e2e8f0;
                     display: flex;
                     flex-direction: column;
@@ -151,11 +179,27 @@ class AdminLayout
                 }
                 .sidebar-brand {
                     padding: 1.25rem 1.35rem;
-                    background: #162219;
-                    border-bottom: 3px solid #739757;
+                    background: var(--adm-sidebar-dark);
+                    border-bottom: 3px solid var(--adm-accent-border);
                 }
-                .sidebar-brand a { color: #ffffff; text-decoration: none; font-weight: 700; font-size: 1.15rem; display: block; }
-                .sidebar-brand span { font-size: 0.78rem; color: #a7f3d0; display: block; margin-top: 0.15rem; }
+                .sidebar-brand a.brand-title { color: #ffffff; text-decoration: none; font-weight: 700; font-size: 1.15rem; display: block; }
+                .sidebar-brand span.brand-sub { font-size: 0.78rem; color: #cbd5e1; display: block; margin-top: 0.15rem; }
+                .sidebar-brand a.version-pill {
+                    display: inline-block;
+                    margin-top: 0.45rem;
+                    padding: 0.12rem 0.55rem;
+                    font-size: 0.72rem;
+                    font-weight: 700;
+                    letter-spacing: 0.03em;
+                    background: rgba(255, 255, 255, 0.12);
+                    color: var(--adm-accent-light);
+                    border-radius: 999px;
+                    text-decoration: none;
+                }
+                .sidebar-brand a.version-pill:hover {
+                    background: rgba(255, 255, 255, 0.22);
+                    color: #ffffff;
+                }
                 .nav-section {
                     padding: 1rem 1.35rem 0.35rem;
                     font-size: 0.74rem;
@@ -177,15 +221,15 @@ class AdminLayout
                 }
                 .side-nav li a:hover { background: rgba(255,255,255,0.06); color: #ffffff; }
                 .side-nav li a.active {
-                    background: rgba(115, 151, 87, 0.22);
+                    background: rgba(255, 255, 255, 0.14);
                     color: #ffffff;
-                    border-left-color: #84cc16;
+                    border-left-color: var(--adm-accent-light);
                     font-weight: 600;
                 }
                 .sidebar-footer {
                     margin-top: auto;
                     padding: 1rem 1.35rem;
-                    background: #162219;
+                    background: var(--adm-sidebar-dark);
                     font-size: 0.84rem;
                     border-top: 1px solid rgba(255,255,255,0.08);
                 }
@@ -265,8 +309,34 @@ class AdminLayout
                 }
                 input:focus, select:focus, textarea:focus {
                     outline: none;
-                    border-color: #255E00;
-                    box-shadow: 0 0 0 3px rgba(37, 94, 0, 0.12);
+                    border-color: var(--adm-accent);
+                    box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.08);
+                }
+                /* Copy Input Wrapper (1-Klick Kopieren Symbol im Textfeld) */
+                .copy-input-wrap {
+                    position: relative;
+                    display: flex;
+                    align-items: center;
+                }
+                .copy-input-wrap input {
+                    padding-right: 2.5rem;
+                }
+                .copy-icon-btn {
+                    position: absolute;
+                    right: 0.35rem;
+                    background: #f1f5f9;
+                    border: 1px solid #cbd5e1;
+                    border-radius: 4px;
+                    padding: 0.25rem 0.45rem;
+                    cursor: pointer;
+                    font-size: 0.88rem;
+                    line-height: 1;
+                    color: #334155;
+                    transition: background 0.15s;
+                }
+                .copy-icon-btn:hover {
+                    background: #e2e8f0;
+                    color: #0f172a;
                 }
                 .btn {
                     display: inline-flex;
@@ -281,8 +351,8 @@ class AdminLayout
                     text-decoration: none;
                 }
                 .btn-sm { padding: 0.3rem 0.65rem; font-size: 0.8rem; }
-                .btn-primary { background: #255E00; color: #fff; }
-                .btn-primary:hover { background: #1b4600; }
+                .btn-primary { background: var(--adm-accent); color: #fff; }
+                .btn-primary:hover { background: var(--adm-accent-hover); }
                 .btn-secondary { background: #fff; color: #334155; border-color: #cbd5e1; }
                 .btn-secondary:hover { background: #f1f5f9; }
                 .btn-danger { background: #dc2626; color: #fff; }
@@ -326,7 +396,7 @@ class AdminLayout
                     background: #e2e8f0;
                 }
                 .subnav-tabs a.active, .subnav-tabs a:hover {
-                    background: #255E00;
+                    background: var(--adm-accent);
                     color: #ffffff;
                 }
                 @media (max-width: 900px) {
@@ -339,8 +409,11 @@ class AdminLayout
         <body>
             <aside class="sidebar">
                 <div class="sidebar-brand">
-                    <a href="admin.php"><?= e($siteTitle) ?></a>
-                    <span>Orga- & Admin-Backend</span>
+                    <a href="admin.php" class="brand-title"><?= e($siteTitle) ?></a>
+                    <span class="brand-sub">Orga- & Admin-Backend</span>
+                    <a href="admin.php?module=updater" class="version-pill" title="System-Version & Änderungshistorie anzeigen">
+                        Version <?= e(Version::CURRENT) ?>
+                    </a>
                 </div>
 
                 <div class="nav-section">Veranstaltungen & Orga</div>
@@ -369,6 +442,7 @@ class AdminLayout
                         <li><a href="admin.php?module=mailtemplates" class="<?= $activeModule === 'mailtemplates' ? 'active' : '' ?>">✉️ E-Mail-Vorlagen</a></li>
                         <li><a href="admin.php?module=users" class="<?= $activeModule === 'users' ? 'active' : '' ?>">🔑 Benutzer & Rollen</a></li>
                         <li><a href="admin.php?module=settings" class="<?= $activeModule === 'settings' ? 'active' : '' ?>">🎨 Globales Design & System</a></li>
+                        <li><a href="admin.php?module=updater" class="<?= $activeModule === 'updater' ? 'active' : '' ?>">🔄 System-Update & Changelog</a></li>
                     </ul>
                 <?php endif; ?>
 
@@ -407,6 +481,22 @@ class AdminLayout
                     <?= $contentHtml ?>
                 </main>
             </div>
+            <script>
+            function copyInputToClipboard(inputId, btnEl) {
+                const input = document.getElementById(inputId);
+                if (!input) return;
+                input.select();
+                input.setSelectionRange(0, 99999);
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(input.value);
+                } else {
+                    document.execCommand('copy');
+                }
+                const orig = btnEl.textContent;
+                btnEl.textContent = '✔';
+                setTimeout(() => { btnEl.textContent = orig; }, 1400);
+            }
+            </script>
         </body>
         </html>
         <?php

@@ -17,6 +17,9 @@ $langUrlEn = '?' . http_build_query($currentParams);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= e($title) ?> – <?= e($siteTitle) ?></title>
+    <?php if (!empty($faviconUrl)): ?>
+        <link rel="icon" href="<?= e($faviconUrl) ?>">
+    <?php endif; ?>
     <link rel="stylesheet" href="<?= e($themeCssUrl) ?>">
 </head>
 <body class="theme-<?= e($activeTheme) ?>">
@@ -52,12 +55,6 @@ $langUrlEn = '?' . http_build_query($currentParams);
                     <?php endif; ?>
                     <?php if ($forumUrl !== ''): ?>
                         <li><a href="<?= e($forumUrl) ?>"><?= e(I18n::t('nav.forum')) ?></a></li>
-                    <?php endif; ?>
-                    <?php if ($privacyUrl !== ''): ?>
-                        <li><a href="<?= e($privacyUrl) ?>"><?= e(I18n::t('nav.privacy')) ?></a></li>
-                    <?php endif; ?>
-                    <?php if ($imprintUrl !== ''): ?>
-                        <li><a href="<?= e($imprintUrl) ?>"><?= e(I18n::t('nav.imprint')) ?></a></li>
                     <?php endif; ?>
                 </ul>
                 <div class="nav-orga">
@@ -98,7 +95,6 @@ $langUrlEn = '?' . http_build_query($currentParams);
                 <?php if ($imprintUrl !== ''): ?>
                     <a href="<?= e($imprintUrl) ?>"><?= e(I18n::t('nav.imprint')) ?></a>
                 <?php endif; ?>
-                <a href="admin.php"><?= e(I18n::t('nav.orga_login')) ?></a>
             </span>
         </div>
     </footer>

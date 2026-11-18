@@ -58,6 +58,43 @@ class Theme
     }
 
     /**
+     * Liefert die Farbpalette eines Themes für das Admin-Backend, damit das globale Theme auch im Backend sofort wirkt.
+     */
+    public static function getAdminPalette(?string $themeSlug = null): array
+    {
+        $slug = self::resolveTheme($themeSlug);
+        return match ($slug) {
+            'parchment' => [
+                'sidebar_bg'    => '#2b180d',
+                'sidebar_dark'  => '#1f1008',
+                'accent'        => '#7c2d12',
+                'accent_hover'  => '#581c08',
+                'accent_border' => '#b45309',
+                'accent_light'  => '#f59e0b',
+                'body_bg'       => '#f7f2e7',
+            ],
+            'modern-clean' => [
+                'sidebar_bg'    => '#0f172a',
+                'sidebar_dark'  => '#020617',
+                'accent'        => '#0f766e',
+                'accent_hover'  => '#115e59',
+                'accent_border' => '#0d9488',
+                'accent_light'  => '#2dd4bf',
+                'body_bg'       => '#f1f5f9',
+            ],
+            default => [ // western-seal ("Western Forest (Waldgrün)")
+                'sidebar_bg'    => '#1e2e22',
+                'sidebar_dark'  => '#162219',
+                'accent'        => '#255E00',
+                'accent_hover'  => '#1b4600',
+                'accent_border' => '#739757',
+                'accent_light'  => '#84cc16',
+                'body_bg'       => '#f2f7ec',
+            ],
+        };
+    }
+
+    /**
      * Rendert eine öffentliche Seite im gewählten Theme inkl. optionalem Veranstaltungs-Header (Logo + Textblock).
      */
     public static function render(string $title, string $contentHtml, array $context = []): void
@@ -74,6 +111,7 @@ class Theme
         $privacyUrl = (string)Database::getSetting('privacy_url', '');
         $imprintUrl = (string)Database::getSetting('imprint_url', '');
         $globalLogo = (string)Database::getSetting('site_logo', '');
+        $faviconUrl = (string)Database::getSetting('site_favicon', '');
 
         // Pro Veranstaltung konfigurierbarer Header (Logo & Textblock über der Anmeldung)
         $headerLogo = '';
@@ -96,7 +134,6 @@ class Theme
             return;
         }
 
-        // Fallback falls layout.php fehlt
         echo "<!DOCTYPE html><html lang='de'><head><meta charset='UTF-8'><title>" . e($title) . "</title></head><body>{$contentHtml}</body></html>";
     }
 }

@@ -51,7 +51,7 @@ $form = [
     'db_user'      => $_POST['db_user'] ?? '',
     'db_pass'      => $_POST['db_pass'] ?? '',
     'db_prefix'    => $_POST['db_prefix'] ?? 'con_',
-    'site_title'   => $_POST['site_title'] ?? 'Westliches Siegel – Con-System',
+    'site_title'   => $_POST['site_title'] ?? 'Con-Management-System',
     'site_subtitle'=> $_POST['site_subtitle'] ?? 'Online-Anmeldung & Veranstaltungsverwaltung',
     'default_theme'=> $_POST['default_theme'] ?? 'western-seal',
     'mail_from'    => $_POST['mail_from'] ?? ('con@' . ($_SERVER['HTTP_HOST'] ?? 'example.org')),
@@ -119,6 +119,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $allChecksOk) {
                     `location_prefix` VARCHAR(100) NOT NULL DEFAULT '',
                     `location` VARCHAR(200) NOT NULL DEFAULT '',
                     `location_suffix` VARCHAR(150) NOT NULL DEFAULT '',
+                    `maps_url` VARCHAR(500) NOT NULL DEFAULT '',
                     `status` ENUM('open', 'locked') NOT NULL DEFAULT 'open',
                     `unlock_password` VARCHAR(100) NOT NULL DEFAULT '',
                     `is_bilingual` TINYINT(1) NOT NULL DEFAULT 0,
@@ -220,6 +221,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $allChecksOk) {
 
             // Standard-Settings eintragen
             $defaultSettings = [
+                'db_version'        => \App\Core\Version::CURRENT,
                 'site_title'        => trim($form['site_title']),
                 'site_subtitle'     => trim($form['site_subtitle']),
                 'default_theme'     => $form['default_theme'],

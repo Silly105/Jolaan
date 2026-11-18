@@ -5,6 +5,7 @@ require_once __DIR__ . '/app/bootstrap.php';
 
 use App\Core\Auth;
 use App\Core\Config;
+use App\Core\Updater;
 use App\Modules\Admin\AdminLayout;
 use App\Modules\Events\EventAdminController;
 use App\Modules\FormBuilder\FormBuilderController;
@@ -19,6 +20,9 @@ if (!Config::isInstalled()) {
 }
 
 Auth::initSession();
+
+// Automatische Datenbank-Migrationen bei Versionssprüngen ausführen
+Updater::runPendingMigrations();
 
 $action = (string)($_REQUEST['action'] ?? '');
 
@@ -83,6 +87,9 @@ switch ($module) {
         break;
     case 'profile':
         SettingsController::handleProfile();
+        break;
+    case 'updater':
+        SettingsController::handleUpdater();
         break;
     case 'dashboard':
     default:

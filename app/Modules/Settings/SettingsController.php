@@ -6,6 +6,9 @@ namespace App\Modules\Settings;
 use App\Core\Auth;
 use App\Core\Database;
 use App\Core\Theme;
+use App\Core\Updater;
+use App\Core\UploadValidator;
+use App\Core\Version;
 use App\Modules\Admin\AdminLayout;
 
 class SettingsController
@@ -36,28 +39,63 @@ class SettingsController
                 Database::setSetting('smtp_pass', (string)$_POST['smtp_pass']);
             }
 
-            // Optionales globales Seitenlogo hochladen
-            if (!empty($_FILES['site_logo_file']['name']) && $_FILES['site_logo_file']['error'] === UPLOAD_ERR_OK) {
-                $ext = strtolower(pathinfo((string)$_FILES['site_logo_file']['name'], PATHINFO_EXTENSION));
-                if (in_array($ext, ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'], true)) {
-                    $fileName = 'site_logo_' . time() . '.' . $ext;
-                    $destDir  = dirname(__DIR__, 3) . '/storage/uploads';
-                    if (move_uploaded_file($_FILES['site_logo_file']['tmp_name'], $destDir . '/' . $fileName)) {
-                        Database::setSetting('site_logo', 'storage/uploads/' . $fileName);
-                    }
+            $uploadErrors = [];
+
+            // Optionales globales Seitenlogo hochladen (mit Sanity-Check)
+            if (!empty($_FILES['site_logo_file']['name'])) {
+                $check = UploadValidator::validateAndStoreImage(
+                    $_FILES['site_logo_file'],
+                    'site_logo',
+                    2097152, // max. 2 MB
+                    2500,    // max. 2500 px Breite
+                    800,     // max. 800 px Höhe
+                    ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg']
+                );
+                if ($check['ok']) {
+                    Database::setSetting('site_logo', $check['path']);
+                } else {
+                    $uploadErrors[] = 'Header-Logo: ' . $check['error'];
                 }
             } elseif (isset($_POST['remove_site_logo'])) {
                 Database::setSetting('site_logo', '');
             }
 
-            $_SESSION['flash_success'] = 'Globale Design- und Systemeinstellungen wurden gespeichert.';
+            // Optionales globales Favicon hochladen (mit Sanity-Check)
+            if (!empty($_FILES['site_favicon_file']['name'])) {
+                $checkFav = UploadValidator::validateAndStoreImage(
+                    $_FILES['site_favicon_file'],
+                    'favicon',
+                    524288, // max. 512 KB
+                    512,    // max. 512 px Breite
+                    512,    // max. 512 px Höhe
+                    ['ico', 'png', 'svg', 'gif', 'webp']
+                );
+                if ($checkFav['ok']) {
+                    Database::setSetting('site_favicon', $checkFav['path']);
+                } else {
+                    $uploadErrors[] = 'Favicon: ' . $checkFav['error'];
+                }
+            } elseif (isset($_POST['remove_site_favicon'])) {
+                Database::setSetting('site_favicon', '');
+            }
+
+            if (!empty($uploadErrors)) {
+                $_SESSION['flash_error'] = implode(' | ', $uploadErrors);
+            } else {
+                $_SESSION['flash_success'] = 'Globale Design- und Systemeinstellungen wurden gespeichert und angewendet.';
+            }
+
             header('Location: admin.php?module=settings');
             exit;
         }
 
-        $themes = Theme::availableThemes();
-        $curTheme = (string)Database::getSetting('default_theme', 'western-seal');
-        $siteLogo = (string)Database::getSetting('site_logo', '');
+        $themes      = Theme::availableThemes();
+        $curTheme    = (string)Database::getSetting('default_theme', 'western-seal');
+        $siteLogo    = (string)Database::getSetting('site_logo', '');
+        $siteFavicon = (string)Database::getSetting('site_favicon', '');
+
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $currentDomainUrl = $scheme . '://' . ($_SERVER['HTTP_HOST'] ?? 'deine-domain.de');
 
         ob_start();
         ?>
@@ -65,7 +103,7 @@ class SettingsController
             <?= Auth::csrfField() ?>
 
             <div class="card">
-                <div class="card-header"><h2>🎨 Globales Theme & Seiten-Header</h2></div>
+                <div class="card-header"><h2>🎨 Globales Theme, Favicon & Seiten-Header</h2></div>
                 <div class="card-body">
                     <div class="grid-2">
                         <div class="form-group">
@@ -78,7 +116,7 @@ class SettingsController
                         </div>
                     </div>
 
-                    <div class="grid-2">
+                    <div class="grid-3">
                         <div class="form-group">
                             <label for="default_theme">Globales Standard-Theme der Seite (pro Veranstaltung überschreibbar)</label>
                             <select id="default_theme" name="default_theme">
@@ -88,15 +126,27 @@ class SettingsController
                                     </option>
                                 <?php endforeach; ?>
                             </select>
-                            <div class="help-text">Dieses Theme gilt für die Startseite und für alle Veranstaltungen, die kein eigenes Theme gewählt haben.</div>
+                            <div class="help-text">Gilt für Startseite, Orga-Backend und alle Veranstaltungen ohne eigenes Theme.</div>
                         </div>
                         <div class="form-group">
                             <label for="site_logo_file">Globales Header-Logo (falls Veranstaltung kein eigenes Logo hat)</label>
                             <input type="file" id="site_logo_file" name="site_logo_file" accept=".png,.jpg,.jpeg,.gif,.webp,.svg">
+                            <div class="help-text">Erlaubt: PNG, JPG, WEBP, GIF, SVG &middot; Max. 2 MB &middot; Max. 2500×800 px (Empfohlen: Querformat ca. 800×150 px bis 1600×300 px).</div>
                             <?php if ($siteLogo !== ''): ?>
                                 <div style="margin-top:0.5rem;display:flex;align-items:center;gap:1rem;">
-                                    <img src="<?= e($siteLogo) ?>" alt="Logo" style="max-height:45px;border-radius:4px;">
+                                    <img src="<?= e($siteLogo) ?>" alt="Logo" style="max-height:45px;border-radius:4px;border:1px solid #cbd5e1;">
                                     <label style="font-weight:400;margin:0;"><input type="checkbox" name="remove_site_logo" value="1"> Entfernen</label>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                        <div class="form-group">
+                            <label for="site_favicon_file">Favicon der Webseite (Browser-Tab-Icon)</label>
+                            <input type="file" id="site_favicon_file" name="site_favicon_file" accept=".ico,.png,.svg,.gif,.webp">
+                            <div class="help-text">Erlaubt: ICO, PNG, SVG, WEBP, GIF &middot; Max. 512 KB &middot; Max. 512×512 px (Empfohlen: Quadratisch 32×32 px oder 64×64 px).</div>
+                            <?php if ($siteFavicon !== ''): ?>
+                                <div style="margin-top:0.5rem;display:flex;align-items:center;gap:1rem;">
+                                    <img src="<?= e($siteFavicon) ?>" alt="Favicon" style="width:28px;height:28px;object-fit:contain;border-radius:4px;border:1px solid #cbd5e1;">
+                                    <label style="font-weight:400;margin:0;"><input type="checkbox" name="remove_site_favicon" value="1"> Entfernen</label>
                                 </div>
                             <?php endif; ?>
                         </div>
@@ -116,21 +166,21 @@ class SettingsController
                     <div class="grid-2">
                         <div class="form-group">
                             <label>Link zur Hauptseite (optional)</label>
-                            <input type="url" name="main_site_url" value="<?= e(Database::getSetting('main_site_url', '')) ?>" placeholder="https://www.westliches-siegel.de">
+                            <input type="url" name="main_site_url" value="<?= e(Database::getSetting('main_site_url', '')) ?>" placeholder="<?= e($currentDomainUrl) ?>">
                         </div>
                         <div class="form-group">
                             <label>Link zum Forum (optional)</label>
-                            <input type="url" name="forum_url" value="<?= e(Database::getSetting('forum_url', '')) ?>">
+                            <input type="url" name="forum_url" value="<?= e(Database::getSetting('forum_url', '')) ?>" placeholder="<?= e($currentDomainUrl) ?>/forum">
                         </div>
                     </div>
                     <div class="grid-2">
                         <div class="form-group">
                             <label>Link zur Datenschutzerklärung</label>
-                            <input type="url" name="privacy_url" value="<?= e(Database::getSetting('privacy_url', '')) ?>">
+                            <input type="url" name="privacy_url" value="<?= e(Database::getSetting('privacy_url', '')) ?>" placeholder="<?= e($currentDomainUrl) ?>/datenschutz">
                         </div>
                         <div class="form-group">
                             <label>Link zum Impressum</label>
-                            <input type="url" name="imprint_url" value="<?= e(Database::getSetting('imprint_url', '')) ?>">
+                            <input type="url" name="imprint_url" value="<?= e(Database::getSetting('imprint_url', '')) ?>" placeholder="<?= e($currentDomainUrl) ?>/impressum">
                         </div>
                     </div>
                 </div>
@@ -177,11 +227,11 @@ class SettingsController
                     <div class="grid-2">
                         <div class="form-group">
                             <label>SMTP-Benutzername</label>
-                            <input type="text" name="smtp_user" value="<?= e(Database::getSetting('smtp_user', '')) ?>">
+                            <input type="text" name="smtp_user" value="<?= e(Database::getSetting('smtp_user', '')) ?>" autocomplete="off">
                         </div>
                         <div class="form-group">
                             <label>SMTP-Passwort (leer lassen, um bestehendes beizubehalten)</label>
-                            <input type="password" name="smtp_pass" placeholder="••••••••">
+                            <input type="password" name="smtp_pass" placeholder="••••••••" autocomplete="new-password">
                         </div>
                     </div>
                 </div>
@@ -283,10 +333,10 @@ class SettingsController
             $subAction = (string)($_POST['sub_action'] ?? '');
 
             if ($subAction === 'create_user') {
-                $email = trim((string)($_POST['email'] ?? ''));
-                $name  = trim((string)($_POST['name'] ?? ''));
-                $role  = ($_POST['role'] ?? 'orga') === 'admin' ? 'admin' : 'orga';
-                $pass  = (string)($_POST['password'] ?? '');
+                $email = trim((string)($_POST['new_user_email'] ?? ''));
+                $name  = trim((string)($_POST['new_user_name'] ?? ''));
+                $role  = ($_POST['new_user_role'] ?? 'orga') === 'admin' ? 'admin' : 'orga';
+                $pass  = (string)($_POST['new_user_initial_password'] ?? '');
 
                 if (!filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($pass) < 8) {
                     $_SESSION['flash_error'] = 'Bitte gib eine gültige E-Mail-Adresse und ein Passwort mit mindestens 8 Zeichen an.';
@@ -305,7 +355,7 @@ class SettingsController
                 $uid   = (int)($_POST['user_id'] ?? 0);
                 $role  = ($_POST['role'] ?? 'orga') === 'admin' ? 'admin' : 'orga';
                 $act   = isset($_POST['is_active']) ? 1 : 0;
-                $newPw = trim((string)($_POST['new_password'] ?? ''));
+                $newPw = trim((string)($_POST['reset_user_password'] ?? ''));
 
                 // Verhindern, dass man sich selbst aussperrt
                 $currentUser = Auth::user();
@@ -319,13 +369,6 @@ class SettingsController
                     Database::query("UPDATE {$tUsers} SET password_hash = :hash WHERE id = :id", ['hash' => password_hash($newPw, PASSWORD_DEFAULT), 'id' => $uid]);
                 }
                 $_SESSION['flash_success'] = 'Benutzer wurde aktualisiert.';
-            } elseif ($subAction === 'delete_user') {
-                $delId = (int)($_POST['delete_id'] ?? 0);
-                $currentUser = Auth::user();
-                if ($currentUser && $delId !== (int)$currentUser['id']) {
-                    Database::query("DELETE FROM {$tUsers} WHERE id = :id", ['id' => $delId]);
-                    $_SESSION['flash_success'] = 'Benutzer wurde gelöscht.';
-                }
             }
 
             header('Location: admin.php?module=users');
@@ -341,7 +384,7 @@ class SettingsController
             <div class="card-header"><h2>🔑 Orga- & Administrator-Konten</h2></div>
             <div class="card-body table-responsive">
                 <p style="margin-top:0;font-size:0.88rem;color:#475569;">
-                    <strong>Rollen-Konzept:</strong>
+                    <strong>Rollen-Konzept</strong> –
                     <code>Admin</code> hat Vollzugriff (Cons, Formular-Baukasten, DSGVO, Systemeinstellungen).
                     <code>Orga / SL</code> kann sich im Backend anmelden, Teilnehmerlisten/Filter/Druckansichten einsehen sowie Zahlungen und Anmeldungen bearbeiten.
                 </p>
@@ -361,7 +404,7 @@ class SettingsController
                             $uid = (int)$u['id'];
                         ?>
                             <tr>
-                                <form method="post" action="admin.php?module=users">
+                                <form method="post" action="admin.php?module=users" autocomplete="off">
                                     <?= Auth::csrfField() ?>
                                     <input type="hidden" name="sub_action" value="update_user">
                                     <input type="hidden" name="user_id" value="<?= $uid ?>">
@@ -377,7 +420,7 @@ class SettingsController
                                         <input type="checkbox" name="is_active" value="1" <?= (int)$u['is_active'] === 1 ? 'checked' : '' ?> <?= $uid === $meId ? 'disabled' : '' ?>>
                                     </td>
                                     <td>
-                                        <input type="password" name="new_password" placeholder="Mind. 8 Zeichen (leer = unverändert)">
+                                        <input type="password" name="reset_user_password" placeholder="Mind. 8 Zeichen (leer = unverändert)" autocomplete="new-password">
                                     </td>
                                     <td style="white-space:nowrap;">
                                         <button type="submit" class="btn btn-primary btn-sm">💾 Speichern</button>
@@ -393,30 +436,34 @@ class SettingsController
         <div class="card">
             <div class="card-header"><h2>➕ Neuen Backend-Benutzer anlegen</h2></div>
             <div class="card-body">
-                <form method="post" action="admin.php?module=users">
+                <form method="post" action="admin.php?module=users" autocomplete="off">
                     <?= Auth::csrfField() ?>
                     <input type="hidden" name="sub_action" value="create_user">
+                    <!-- Versteckte Dummy-Felder verhindern unerwünschtes Browser-Autofill des eigenen Admin-Logins -->
+                    <input type="text" name="prevent_autofill_user" style="display:none;" tabindex="-1" autocomplete="username">
+                    <input type="password" name="prevent_autofill_pass" style="display:none;" tabindex="-1" autocomplete="current-password">
+
                     <div class="grid-2">
                         <div class="form-group">
-                            <label>Name*</label>
-                            <input type="text" name="name" required>
+                            <label for="new_user_name">Name*</label>
+                            <input type="text" id="new_user_name" name="new_user_name" autocomplete="off" required>
                         </div>
                         <div class="form-group">
-                            <label>E-Mail-Adresse*</label>
-                            <input type="email" name="email" required>
+                            <label for="new_user_email">E-Mail-Adresse*</label>
+                            <input type="email" id="new_user_email" name="new_user_email" autocomplete="off" required>
                         </div>
                     </div>
                     <div class="grid-2">
                         <div class="form-group">
-                            <label>Rolle*</label>
-                            <select name="role">
+                            <label for="new_user_role">Rolle*</label>
+                            <select id="new_user_role" name="new_user_role">
                                 <option value="orga">Orga / SL (Teilnehmer & Listen verwalten)</option>
                                 <option value="admin">Administrator (Vollzugriff)</option>
                             </select>
                         </div>
                         <div class="form-group">
-                            <label>Initiales Passwort (mindestens 8 Zeichen)*</label>
-                            <input type="password" name="password" minlength="8" required>
+                            <label for="new_user_initial_password">Initiales Passwort (mindestens 8 Zeichen)*</label>
+                            <input type="password" id="new_user_initial_password" name="new_user_initial_password" minlength="8" autocomplete="new-password" required>
                         </div>
                     </div>
                     <button type="submit" class="btn btn-secondary">➕ Benutzer anlegen</button>
@@ -468,15 +515,15 @@ class SettingsController
                     <?= Auth::csrfField() ?>
                     <div class="form-group">
                         <label>Aktuelles Passwort</label>
-                        <input type="password" name="old_password" required>
+                        <input type="password" name="old_password" autocomplete="current-password" required>
                     </div>
                     <div class="form-group">
                         <label>Neues Passwort (mindestens 8 Zeichen)</label>
-                        <input type="password" name="new_password1" minlength="8" required>
+                        <input type="password" name="new_password1" minlength="8" autocomplete="new-password" required>
                     </div>
                     <div class="form-group">
                         <label>Neues Passwort wiederholen</label>
-                        <input type="password" name="new_password2" minlength="8" required>
+                        <input type="password" name="new_password2" minlength="8" autocomplete="new-password" required>
                     </div>
                     <button type="submit" class="btn btn-primary">💾 Passwort ändern</button>
                 </form>
@@ -484,5 +531,92 @@ class SettingsController
         </div>
         <?php
         AdminLayout::render('Mein Profil & Passwort', 'profile', (string)ob_get_clean());
+    }
+
+    /**
+     * System-Update & Changelog Modul: Zeigt installierte DB-Version, Code-Version und die komplette Änderungshistorie
+     */
+    public static function handleUpdater(): void
+    {
+        if (!Auth::isAdmin()) {
+            header('Location: admin.php');
+            exit;
+        }
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            Auth::requireCsrf();
+            $executed = Updater::runPendingMigrations();
+            if (!empty($executed)) {
+                $_SESSION['flash_success'] = 'Datenbank-Update erfolgreich durchgeführt für Version(en): ' . implode(', ', $executed);
+            } else {
+                $_SESSION['flash_success'] = 'Datenbank und System sind bereits auf dem aktuellsten Stand (v' . Version::CURRENT . ').';
+            }
+            header('Location: admin.php?module=updater');
+            exit;
+        }
+
+        $dbVersion   = (string)Database::getSetting('db_version', '0.9.000');
+        $codeVersion = Version::CURRENT;
+        $isUpToDate  = version_compare($dbVersion, $codeVersion, '>=');
+        $history     = array_reverse(Version::history(), true);
+
+        ob_start();
+        ?>
+        <div class="card">
+            <div class="card-header">
+                <h2>🔄 System-Status & Datenbank-Migration</h2>
+                <form method="post" action="admin.php?module=updater" style="margin:0;">
+                    <?= Auth::csrfField() ?>
+                    <button type="submit" class="btn btn-primary btn-sm">🔄 Migrations-Prüfung jetzt ausführen</button>
+                </form>
+            </div>
+            <div class="card-body">
+                <div class="grid-3">
+                    <div style="background:#f8fafc;padding:1rem;border-radius:6px;border:1px solid #e2e8f0;">
+                        <div style="font-size:0.82rem;color:#64748b;">Programm-Version (Dateien)</div>
+                        <div style="font-size:1.4rem;font-weight:700;color:#0f172a;">v<?= e($codeVersion) ?></div>
+                    </div>
+                    <div style="background:#f8fafc;padding:1rem;border-radius:6px;border:1px solid #e2e8f0;">
+                        <div style="font-size:0.82rem;color:#64748b;">Datenbank-Schema-Version</div>
+                        <div style="font-size:1.4rem;font-weight:700;color:#0f172a;">v<?= e($dbVersion) ?></div>
+                    </div>
+                    <div style="background:#f8fafc;padding:1rem;border-radius:6px;border:1px solid #e2e8f0;">
+                        <div style="font-size:0.82rem;color:#64748b;">Update-Status</div>
+                        <div style="font-size:1.15rem;font-weight:700;margin-top:0.2rem;">
+                            <?php if ($isUpToDate): ?>
+                                <span class="badge badge-green" style="font-size:0.9rem;">✔ Aktuell & Synchron</span>
+                            <?php else: ?>
+                                <span class="badge badge-amber" style="font-size:0.9rem;">⚠️ Datenbank-Update ausstehend</span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+                <p style="margin:1rem 0 0 0;font-size:0.88rem;color:#475569;">
+                    Das Update-Modul erkennt Versionssprünge automatisch und führt alle dazwischenliegenden Datenbank-Migrationen chronologisch aus, ohne dass bestehende Daten verloren gehen.
+                </p>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><h2>📜 Fortlaufende Änderungshistorie (Changelog)</h2></div>
+            <div class="card-body">
+                <?php foreach ($history as $ver => $meta): ?>
+                    <div style="border-left:4px solid var(--adm-accent);padding-left:1rem;margin-bottom:1.5rem;">
+                        <div style="display:flex;align-items:center;gap:0.65rem;margin-bottom:0.35rem;">
+                            <span class="badge badge-blue" style="font-size:0.85rem;">v<?= e($ver) ?></span>
+                            <strong><?= e($meta['title'] ?? '') ?></strong>
+                            <span style="font-size:0.82rem;color:#64748b;">(<?= e($meta['date'] ?? '') ?>)</span>
+                        </div>
+                        <ul style="margin:0.35rem 0 0 1.2rem;padding:0;font-size:0.9rem;color:#334155;">
+                            <?php foreach ($meta['changes'] ?? [] as $chg): ?>
+                                <li style="margin-bottom:0.2rem;"><?= e($chg) ?></li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        <?php
+        AdminLayout::render('System-Update & Änderungshistorie (v' . Version::CURRENT . ')', 'updater', (string)ob_get_clean());
     }
 }

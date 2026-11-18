@@ -8,6 +8,7 @@ use App\Core\Config;
 use App\Core\Database;
 use App\Core\I18n;
 use App\Core\Theme;
+use App\Core\Updater;
 use App\Modules\Events\EventRepository;
 
 if (!Config::isInstalled()) {
@@ -15,6 +16,7 @@ if (!Config::isInstalled()) {
     exit;
 }
 
+Updater::runPendingMigrations();
 I18n::init(true);
 
 $events = EventRepository::upcomingForIndex();
@@ -49,8 +51,12 @@ $renderEventCard = function (array $ev): void {
     $startFormatted = format_date($ev['start_date'], $lang);
     $endFormatted   = format_date($ev['end_date'], $lang);
     $dateRange      = ($startFormatted === $endFormatted) ? $startFormatted : "{$startFormatted} – {$endFormatted}";
-    $locParts       = array_filter([$ev['location_prefix'], $ev['location'], $ev['location_suffix']], fn($p) => trim((string)$p) !== '');
-    $locationLine   = implode(' ', $locParts);
+
+    $locPre  = trim((string)($ev['location_prefix'] ?? ''));
+    $locMain = trim((string)($ev['location'] ?? ''));
+    $locSuf  = trim((string)($ev['location_suffix'] ?? ''));
+    $mapsUrl = trim((string)($ev['maps_url'] ?? ''));
+    $locTargetText = trim($locMain . ($locSuf !== '' ? ' ' . $locSuf : ''));
     ?>
     <div class="event-item">
         <h2 class="event-title">
@@ -61,8 +67,14 @@ $renderEventCard = function (array $ev): void {
         </h2>
         <div class="event-meta">
             📅 <?= e($dateRange) ?>
-            <?php if ($locationLine !== ''): ?>
-                &nbsp;&middot;&nbsp; 📍 <?= e($locationLine) ?>
+            <?php if ($locPre !== '' || $locTargetText !== ''): ?>
+                &nbsp;&middot;&nbsp; 📍
+                <?php if ($locPre !== ''): ?><?= e($locPre) ?> <?php endif; ?>
+                <?php if ($mapsUrl !== '' && $locTargetText !== ''): ?>
+                    <a href="<?= e($mapsUrl) ?>" target="_blank" rel="noopener" title="Auf Karte anzeigen"><?= e($locTargetText) ?> &nearr;</a>
+                <?php else: ?>
+                    <?= e($locTargetText) ?>
+                <?php endif; ?>
             <?php endif; ?>
         </div>
 

@@ -6,6 +6,7 @@ namespace App\Modules\Events;
 use App\Core\Auth;
 use App\Core\Database;
 use App\Core\Theme;
+use App\Core\UploadValidator;
 use App\Modules\Admin\AdminLayout;
 
 class EventAdminController
@@ -171,6 +172,7 @@ class EventAdminController
             $locPrefix       = trim((string)($_POST['location_prefix'] ?? ''));
             $location        = trim((string)($_POST['location'] ?? ''));
             $locSuffix       = trim((string)($_POST['location_suffix'] ?? ''));
+            $mapsUrl         = trim((string)($_POST['maps_url'] ?? ''));
             $status          = ($_POST['status'] ?? 'open') === 'locked' ? 'locked' : 'open';
             $unlockPassword  = trim((string)($_POST['unlock_password'] ?? ''));
             $isBilingual     = isset($_POST['is_bilingual']) ? 1 : 0;
@@ -181,16 +183,23 @@ class EventAdminController
             $forumUrl        = trim((string)($_POST['forum_url'] ?? ''));
             $adminEmail      = trim((string)($_POST['admin_email'] ?? ''));
 
-            // Optionaler Upload eines Veranstaltungslogos für den Header
+            // Optionaler Upload eines Veranstaltungslogos für den Header (mit Sanity-Check)
             $headerLogoPath = $event['header_logo_path'] ?? '';
-            if (!empty($_FILES['header_logo']['name']) && $_FILES['header_logo']['error'] === UPLOAD_ERR_OK) {
-                $ext = strtolower(pathinfo((string)$_FILES['header_logo']['name'], PATHINFO_EXTENSION));
-                if (in_array($ext, ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'], true)) {
-                    $fileName = 'event_logo_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
-                    $destDir  = dirname(__DIR__, 3) . '/storage/uploads';
-                    if (move_uploaded_file($_FILES['header_logo']['tmp_name'], $destDir . '/' . $fileName)) {
-                        $headerLogoPath = 'storage/uploads/' . $fileName;
-                    }
+            if (!empty($_FILES['header_logo']['name'])) {
+                $check = UploadValidator::validateAndStoreImage(
+                    $_FILES['header_logo'],
+                    'event_logo',
+                    2097152, // max. 2 MB
+                    2500,    // max. 2500 px Breite
+                    800,     // max. 800 px Höhe
+                    ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg']
+                );
+                if ($check['ok']) {
+                    $headerLogoPath = $check['path'];
+                } else {
+                    $_SESSION['flash_error'] = 'Header-Logo Upload abgelehnt: ' . $check['error'];
+                    header('Location: admin.php?module=events&action=' . ($isNew ? 'new' : 'edit&id=' . $id));
+                    exit;
                 }
             } elseif (isset($_POST['remove_header_logo'])) {
                 $headerLogoPath = '';
@@ -207,6 +216,7 @@ class EventAdminController
                 'lpre'      => $locPrefix,
                 'loc'       => $location,
                 'lsuf'      => $locSuffix,
+                'maps'      => $mapsUrl,
                 'status'    => $status,
                 'unlock'    => $unlockPassword,
                 'biling'    => $isBilingual,
@@ -222,8 +232,8 @@ class EventAdminController
             if ($isNew) {
                 Database::query(
                     "INSERT INTO {$tEvents}
-                     (title, subtitle, start_date, end_date, countdown_target, show_on_index, show_countdown, location_prefix, location, location_suffix, status, unlock_password, is_bilingual, theme, header_logo_path, header_text_de, header_text_en, flyer_url, forum_url, admin_email)
-                     VALUES (:title, :subtitle, :sdate, :edate, :cdtarget, :sindex, :scd, :lpre, :loc, :lsuf, :status, :unlock, :biling, :theme, :hlogo, :htext_de, :htext_en, :flyer, :forum, :aemail)",
+                     (title, subtitle, start_date, end_date, countdown_target, show_on_index, show_countdown, location_prefix, location, location_suffix, maps_url, status, unlock_password, is_bilingual, theme, header_logo_path, header_text_de, header_text_en, flyer_url, forum_url, admin_email)
+                     VALUES (:title, :subtitle, :sdate, :edate, :cdtarget, :sindex, :scd, :lpre, :loc, :lsuf, :maps, :status, :unlock, :biling, :theme, :hlogo, :htext_de, :htext_en, :flyer, :forum, :aemail)",
                     $params
                 );
                 $newId = Database::lastInsertId();
@@ -241,7 +251,7 @@ class EventAdminController
                     "UPDATE {$tEvents} SET
                      title = :title, subtitle = :subtitle, start_date = :sdate, end_date = :edate,
                      countdown_target = :cdtarget, show_on_index = :sindex, show_countdown = :scd,
-                     location_prefix = :lpre, location = :loc, location_suffix = :lsuf,
+                     location_prefix = :lpre, location = :loc, location_suffix = :lsuf, maps_url = :maps,
                      status = :status, unlock_password = :unlock, is_bilingual = :biling,
                      theme = :theme, header_logo_path = :hlogo, header_text_de = :htext_de, header_text_en = :htext_en,
                      flyer_url = :flyer, forum_url = :forum, admin_email = :aemail
@@ -269,6 +279,7 @@ class EventAdminController
             'location_prefix'  => '',
             'location'         => '',
             'location_suffix'  => '',
+            'maps_url'         => '',
             'status'           => 'open',
             'unlock_password'  => bin2hex(random_bytes(4)),
             'is_bilingual'     => 0,
@@ -305,7 +316,7 @@ class EventAdminController
                                 <option value="0">📐 Aus globaler Standard-Vorlage starten (SC, NSC, Team + Standardfelder)</option>
                                 <?php foreach ($allEvents as $other): ?>
                                     <option value="<?= (int)$other['id'] ?>">
-                                        📋 Komplett übernehmen von: <?= e($other['title']) ?> (<?= e(format_date($other['start_date'])) ?>)
+                                        📋 Komplett übernehmen von <?= e($other['title']) ?> (<?= e(format_date($other['start_date'])) ?>)
                                     </option>
                                 <?php endforeach; ?>
                             </select>
@@ -319,12 +330,18 @@ class EventAdminController
                     <div class="card-body">
                         <div class="grid-2">
                             <div>
-                                <label>Öffentlicher Anmeldelink:</label>
-                                <input type="text" readonly value="<?= e($regUrl) ?>" onclick="this.select()">
+                                <label for="input_public_reg_url">Öffentlicher Anmeldelink</label>
+                                <div class="copy-input-wrap">
+                                    <input type="text" id="input_public_reg_url" readonly value="<?= e($regUrl) ?>" onclick="this.select()">
+                                    <button type="button" class="copy-icon-btn" onclick="copyInputToClipboard('input_public_reg_url', this)" title="In die Zwischenablage kopieren">📋</button>
+                                </div>
                             </div>
                             <div>
-                                <label>Geheim-Link (Anmeldung trotz Sperre / ausgebuchter Plätze):</label>
-                                <input type="text" readonly value="<?= e($secretUrl) ?>" onclick="this.select()">
+                                <label for="input_secret_reg_url">Geheim-Link (Anmeldung trotz Sperre / ausgebuchter Plätze)</label>
+                                <div class="copy-input-wrap">
+                                    <input type="text" id="input_secret_reg_url" readonly value="<?= e($secretUrl) ?>" onclick="this.select()">
+                                    <button type="button" class="copy-icon-btn" onclick="copyInputToClipboard('input_secret_reg_url', this)" title="In die Zwischenablage kopieren">📋</button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -368,6 +385,11 @@ class EventAdminController
                             <label for="location_suffix">Orts-Nachsatz (z. B. „im Sauerland“)</label>
                             <input type="text" id="location_suffix" name="location_suffix" value="<?= e($ev['location_suffix']) ?>">
                         </div>
+                    </div>
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label for="maps_url">Karten- / Google-Maps-Link zum Veranstaltungsort (optional)</label>
+                        <input type="url" id="maps_url" name="maps_url" value="<?= e($ev['maps_url'] ?? '') ?>" placeholder="https://maps.google.com/...">
+                        <div class="help-text">Wird auf der Startseite als anklickbarer Link hinter Veranstaltungsort und Orts-Nachsatz gelegt.</div>
                     </div>
                 </div>
             </div>
@@ -449,6 +471,7 @@ class EventAdminController
                         <div class="form-group">
                             <label for="header_logo">Optionales Veranstaltungs-Logo im Header</label>
                             <input type="file" id="header_logo" name="header_logo" accept=".png,.jpg,.jpeg,.gif,.webp,.svg">
+                            <div class="help-text">Erlaubte Formate: PNG, JPG, WEBP, GIF, SVG &middot; Max. 2 MB &middot; Max. Auflösung: 2500×800 px (Empfohlen: Querformat ca. 800×150 px bis 1600×300 px).</div>
                             <?php if (!empty($ev['header_logo_path'])): ?>
                                 <div style="margin-top:0.5rem;display:flex;align-items:center;gap:1rem;">
                                     <img src="<?= e($ev['header_logo_path']) ?>" alt="Logo" style="max-height:48px;border-radius:4px;border:1px solid #cbd5e1;">
@@ -483,12 +506,12 @@ class EventAdminController
         <?php if (!$isNew): ?>
             <div class="card" style="border-color:#fca5a5;">
                 <div class="card-header" style="background:#fef2f2;">
-                    <h2 style="color:#991b1b;">⚠️ Gefahrenzone: Veranstaltung komplett löschen</h2>
+                    <h2 style="color:#991b1b;">⚠️ Gefahrenzone – Veranstaltung komplett löschen</h2>
                 </div>
                 <div class="card-body">
                     <form method="post" action="admin.php?module=events&action=delete&id=<?= $id ?>" onsubmit="return confirm('Veranstaltung samt aller Anmeldungen wirklich unwiderruflich löschen?');">
                         <?= Auth::csrfField() ?>
-                        <p style="margin-top:0;">Um diese Veranstaltung inklusive aller eingegangenen Anmeldungen unwiderruflich zu löschen, tippe <strong>LÖSCHEN</strong> in das Feld:</p>
+                        <p style="margin-top:0;">Um diese Veranstaltung inklusive aller eingegangenen Anmeldungen unwiderruflich zu löschen, tippe <strong>LÖSCHEN</strong> in das Feld</p>
                         <div style="display:flex;gap:0.75rem;max-width:420px;">
                             <input type="text" name="confirm_text" placeholder="LÖSCHEN" required>
                             <button type="submit" class="btn btn-danger">Endgültig löschen</button>
@@ -498,7 +521,7 @@ class EventAdminController
             </div>
         <?php endif; ?>
         <?php
-        AdminLayout::render($isNew ? 'Neue Veranstaltung anlegen' : 'Veranstaltung bearbeiten: ' . $ev['title'], 'events', (string)ob_get_clean(), $isNew ? null : $id);
+        AdminLayout::render($isNew ? 'Neue Veranstaltung anlegen' : 'Veranstaltung bearbeiten – ' . $ev['title'], 'events', (string)ob_get_clean(), $isNew ? null : $id);
     }
 
     public static function handleGroups(): void
@@ -695,6 +718,6 @@ class EventAdminController
             </div>
         </div>
         <?php
-        AdminLayout::render('Teilnehmergruppen & Kontingente: ' . $event['title'], 'groups', (string)ob_get_clean(), $eventId);
+        AdminLayout::render('Teilnehmergruppen & Kontingente – ' . $event['title'], 'groups', (string)ob_get_clean(), $eventId);
     }
 }
