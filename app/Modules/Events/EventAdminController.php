@@ -1,0 +1,700 @@
+<?php
+declare(strict_types=1);
+
+namespace App\Modules\Events;
+
+use App\Core\Auth;
+use App\Core\Database;
+use App\Core\Theme;
+use App\Modules\Admin\AdminLayout;
+
+class EventAdminController
+{
+    public static function handleDashboard(): void
+    {
+        $events = EventRepository::all();
+        $tRegs  = Database::table('registrations');
+
+        foreach ($events as &$ev) {
+            $eid = (int)$ev['id'];
+            $ev['groups'] = EventRepository::getGroupsWithSeats($eid);
+            $ev['total_regs'] = (int)Database::fetchScalar("SELECT COUNT(*) FROM {$tRegs} WHERE event_id = :eid", ['eid' => $eid]);
+            $ev['confirmed_regs'] = (int)Database::fetchScalar("SELECT COUNT(*) FROM {$tRegs} WHERE event_id = :eid AND is_confirmed = 1", ['eid' => $eid]);
+            $ev['unpaid_regs'] = (int)Database::fetchScalar("SELECT COUNT(*) FROM {$tRegs} WHERE event_id = :eid AND is_confirmed = 1 AND is_fully_paid = 0", ['eid' => $eid]);
+        }
+        unset($ev);
+
+        ob_start();
+        ?>
+        <div class="card">
+            <div class="card-header">
+                <h2>Veranstaltungen (Cons)</h2>
+                <?php if (Auth::isAdmin()): ?>
+                    <a href="admin.php?module=events&action=new" class="btn btn-primary">➕ Neue Veranstaltung anlegen</a>
+                <?php endif; ?>
+            </div>
+            <div class="card-body table-responsive">
+                <?php if (empty($events)): ?>
+                    <p style="margin:0;color:#64748b;">Noch keine Veranstaltungen angelegt.</p>
+                <?php else: ?>
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Veranstaltung</th>
+                                <th>Datum</th>
+                                <th>Status & Startseite</th>
+                                <th>Anmeldungen (Bestätigt / Offen)</th>
+                                <th>Freie Plätze</th>
+                                <th>Aktionen</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($events as $ev):
+                                $eid = (int)$ev['id'];
+                            ?>
+                                <tr>
+                                    <td>
+                                        <strong><?= e($ev['title']) ?></strong>
+                                        <?php if ($ev['subtitle'] !== ''): ?>
+                                            <div style="font-size:0.82rem;color:#64748b;"><?= e($ev['subtitle']) ?></div>
+                                        <?php endif; ?>
+                                        <?php if ($ev['theme']): ?>
+                                            <span class="badge badge-blue">Theme: <?= e($ev['theme']) ?></span>
+                                        <?php endif; ?>
+                                        <?php if ((int)$ev['is_bilingual'] === 1): ?>
+                                            <span class="badge badge-amber">DE / EN</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td style="white-space:nowrap;">
+                                        <?= e(format_date($ev['start_date'])) ?> – <?= e(format_date($ev['end_date'])) ?>
+                                    </td>
+                                    <td>
+                                        <?php if ($ev['status'] === 'open'): ?>
+                                            <span class="badge badge-green">Anmeldung offen</span>
+                                        <?php else: ?>
+                                            <span class="badge badge-red">Gesperrt</span>
+                                        <?php endif; ?>
+                                        <?php if ((int)$ev['show_on_index'] === 1): ?>
+                                            <span class="badge badge-blue">Auf Startseite</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <strong><?= $ev['confirmed_regs'] ?></strong> bestätigt
+                                        <span style="color:#64748b;">(gesamt: <?= $ev['total_regs'] ?>)</span>
+                                        <?php if ($ev['unpaid_regs'] > 0): ?>
+                                            <div style="font-size:0.8rem;color:#b45309;"><?= $ev['unpaid_regs'] ?> Zahlung(en) offen</div>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <?php foreach ($ev['groups'] as $g): ?>
+                                            <div style="font-size:0.82rem;">
+                                                <?= e($g['name_de']) ?>:
+                                                <?php if ($g['calculated_free'] !== null): ?>
+                                                    <strong><?= (int)$g['calculated_free'] ?></strong> frei
+                                                    <?= $g['is_overridden'] ? '(manuell)' : '' ?>
+                                                <?php else: ?>
+                                                    <em>unbegrenzt</em>
+                                                <?php endif; ?>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </td>
+                                    <td style="white-space:nowrap;">
+                                        <a href="admin.php?module=registrations&event_id=<?= $eid ?>" class="btn btn-primary btn-sm">👥 Teilnehmer</a>
+                                        <a href="admin.php?module=lists&event_id=<?= $eid ?>" class="btn btn-secondary btn-sm">📋 Listen</a>
+                                        <?php if (Auth::isAdmin()): ?>
+                                            <a href="admin.php?module=events&action=edit&id=<?= $eid ?>" class="btn btn-secondary btn-sm">⚙️ Bearbeiten</a>
+                                        <?php endif; ?>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                <?php endif; ?>
+            </div>
+        </div>
+        <?php
+        AdminLayout::render('Veranstaltungsübersicht (Dashboard)', 'dashboard', (string)ob_get_clean());
+    }
+
+    public static function handleEvents(): void
+    {
+        if (!Auth::isAdmin()) {
+            $_SESSION['flash_error'] = 'Nur Administratoren dürfen Veranstaltungen anlegen oder ändern.';
+            header('Location: admin.php');
+            exit;
+        }
+
+        $action = (string)($_REQUEST['action'] ?? 'new');
+        $id     = (int)($_REQUEST['id'] ?? 0);
+        $tEvents = Database::table('events');
+
+        // Veranstaltung löschen
+        if ($action === 'delete' && $_SERVER['REQUEST_METHOD'] === 'POST' && $id > 0) {
+            Auth::requireCsrf();
+            if (trim((string)($_POST['confirm_text'] ?? '')) === 'LÖSCHEN') {
+                $tRegs   = Database::table('registrations');
+                $tVals   = Database::table('registration_values');
+                $tGroups = Database::table('event_groups');
+                $tFields = Database::table('form_fields');
+                $tViews  = Database::table('saved_views');
+
+                Database::query("DELETE rv FROM {$tVals} rv INNER JOIN {$tRegs} r ON r.id = rv.registration_id WHERE r.event_id = :eid", ['eid' => $id]);
+                Database::query("DELETE FROM {$tRegs} WHERE event_id = :eid", ['eid' => $id]);
+                Database::query("DELETE FROM {$tGroups} WHERE event_id = :eid", ['eid' => $id]);
+                Database::query("DELETE FROM {$tFields} WHERE event_id = :eid", ['eid' => $id]);
+                Database::query("DELETE FROM {$tViews} WHERE event_id = :eid", ['eid' => $id]);
+                Database::query("DELETE FROM {$tEvents} WHERE id = :eid", ['eid' => $id]);
+
+                $_SESSION['flash_success'] = 'Die Veranstaltung und alle zugehörigen Daten wurden gelöscht.';
+                header('Location: admin.php');
+                exit;
+            } else {
+                $_SESSION['flash_error'] = 'Bestätigungstext „LÖSCHEN“ wurde nicht korrekt eingegeben.';
+                header("Location: admin.php?module=events&action=edit&id={$id}");
+                exit;
+            }
+        }
+
+        $event = $id > 0 ? EventRepository::find($id) : null;
+        $isNew = ($event === null);
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($action, ['new', 'edit'], true)) {
+            Auth::requireCsrf();
+
+            $title           = trim((string)($_POST['title'] ?? ''));
+            $subtitle        = trim((string)($_POST['subtitle'] ?? ''));
+            $startDate       = trim((string)($_POST['start_date'] ?? date('Y-m-d')));
+            $endDate         = trim((string)($_POST['end_date'] ?? $startDate));
+            $countdownTarget = trim((string)($_POST['countdown_target'] ?? ''));
+            $showOnIndex     = isset($_POST['show_on_index']) ? 1 : 0;
+            $showCountdown   = isset($_POST['show_countdown']) ? 1 : 0;
+            $locPrefix       = trim((string)($_POST['location_prefix'] ?? ''));
+            $location        = trim((string)($_POST['location'] ?? ''));
+            $locSuffix       = trim((string)($_POST['location_suffix'] ?? ''));
+            $status          = ($_POST['status'] ?? 'open') === 'locked' ? 'locked' : 'open';
+            $unlockPassword  = trim((string)($_POST['unlock_password'] ?? ''));
+            $isBilingual     = isset($_POST['is_bilingual']) ? 1 : 0;
+            $theme           = trim((string)($_POST['theme'] ?? ''));
+            $headerTextDe    = trim((string)($_POST['header_text_de'] ?? ''));
+            $headerTextEn    = trim((string)($_POST['header_text_en'] ?? ''));
+            $flyerUrl        = trim((string)($_POST['flyer_url'] ?? ''));
+            $forumUrl        = trim((string)($_POST['forum_url'] ?? ''));
+            $adminEmail      = trim((string)($_POST['admin_email'] ?? ''));
+
+            // Optionaler Upload eines Veranstaltungslogos für den Header
+            $headerLogoPath = $event['header_logo_path'] ?? '';
+            if (!empty($_FILES['header_logo']['name']) && $_FILES['header_logo']['error'] === UPLOAD_ERR_OK) {
+                $ext = strtolower(pathinfo((string)$_FILES['header_logo']['name'], PATHINFO_EXTENSION));
+                if (in_array($ext, ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'], true)) {
+                    $fileName = 'event_logo_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+                    $destDir  = dirname(__DIR__, 3) . '/storage/uploads';
+                    if (move_uploaded_file($_FILES['header_logo']['tmp_name'], $destDir . '/' . $fileName)) {
+                        $headerLogoPath = 'storage/uploads/' . $fileName;
+                    }
+                }
+            } elseif (isset($_POST['remove_header_logo'])) {
+                $headerLogoPath = '';
+            }
+
+            $params = [
+                'title'     => $title !== '' ? $title : 'Unbenannte Veranstaltung',
+                'subtitle'  => $subtitle,
+                'sdate'     => $startDate,
+                'edate'     => $endDate,
+                'cdtarget'  => $countdownTarget !== '' ? str_replace('T', ' ', $countdownTarget) : null,
+                'sindex'    => $showOnIndex,
+                'scd'       => $showCountdown,
+                'lpre'      => $locPrefix,
+                'loc'       => $location,
+                'lsuf'      => $locSuffix,
+                'status'    => $status,
+                'unlock'    => $unlockPassword,
+                'biling'    => $isBilingual,
+                'theme'     => $theme !== '' ? $theme : null,
+                'hlogo'     => $headerLogoPath,
+                'htext_de'  => $headerTextDe,
+                'htext_en'  => $headerTextEn,
+                'flyer'     => $flyerUrl,
+                'forum'     => $forumUrl,
+                'aemail'    => $adminEmail,
+            ];
+
+            if ($isNew) {
+                Database::query(
+                    "INSERT INTO {$tEvents}
+                     (title, subtitle, start_date, end_date, countdown_target, show_on_index, show_countdown, location_prefix, location, location_suffix, status, unlock_password, is_bilingual, theme, header_logo_path, header_text_de, header_text_en, flyer_url, forum_url, admin_email)
+                     VALUES (:title, :subtitle, :sdate, :edate, :cdtarget, :sindex, :scd, :lpre, :loc, :lsuf, :status, :unlock, :biling, :theme, :hlogo, :htext_de, :htext_en, :flyer, :forum, :aemail)",
+                    $params
+                );
+                $newId = Database::lastInsertId();
+
+                // Felder, Teilnehmergruppen & Listen von Vorlage oder vorheriger Veranstaltung übernehmen
+                $cloneFrom = (int)($_POST['clone_from_event_id'] ?? 0);
+                EventRepository::cloneStructure($cloneFrom > 0 ? $cloneFrom : null, $newId);
+
+                $_SESSION['flash_success'] = 'Veranstaltung wurde angelegt und Felder/Gruppen/Listen wurden übernommen.';
+                header("Location: admin.php?module=events&action=edit&id={$newId}");
+                exit;
+            } else {
+                $params['id'] = $id;
+                Database::query(
+                    "UPDATE {$tEvents} SET
+                     title = :title, subtitle = :subtitle, start_date = :sdate, end_date = :edate,
+                     countdown_target = :cdtarget, show_on_index = :sindex, show_countdown = :scd,
+                     location_prefix = :lpre, location = :loc, location_suffix = :lsuf,
+                     status = :status, unlock_password = :unlock, is_bilingual = :biling,
+                     theme = :theme, header_logo_path = :hlogo, header_text_de = :htext_de, header_text_en = :htext_en,
+                     flyer_url = :flyer, forum_url = :forum, admin_email = :aemail
+                     WHERE id = :id",
+                    $params
+                );
+                $_SESSION['flash_success'] = 'Veranstaltungseinstellungen wurden gespeichert.';
+                header("Location: admin.php?module=events&action=edit&id={$id}");
+                exit;
+            }
+        }
+
+        $allEvents = EventRepository::all();
+        $themes    = Theme::availableThemes();
+
+        $ev = $event ?? [
+            'id'               => 0,
+            'title'            => '',
+            'subtitle'         => '',
+            'start_date'       => date('Y-m-d', strtotime('+30 days')),
+            'end_date'         => date('Y-m-d', strtotime('+32 days')),
+            'countdown_target' => '',
+            'show_on_index'    => 1,
+            'show_countdown'   => 0,
+            'location_prefix'  => '',
+            'location'         => '',
+            'location_suffix'  => '',
+            'status'           => 'open',
+            'unlock_password'  => bin2hex(random_bytes(4)),
+            'is_bilingual'     => 0,
+            'theme'            => '',
+            'header_logo_path' => '',
+            'header_text_de'   => '',
+            'header_text_en'   => '',
+            'flyer_url'        => '',
+            'forum_url'        => '',
+            'admin_email'      => (string)Database::getSetting('mail_from_address', ''),
+        ];
+
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
+        $dir    = rtrim(dirname($_SERVER['PHP_SELF']), '/\\');
+        $regUrl = "{$scheme}://{$host}{$dir}/register.php?event_id={$id}";
+        $secretUrl = $regUrl . '&unlock=' . urlencode((string)$ev['unlock_password']);
+
+        ob_start();
+        if (!$isNew) {
+            echo AdminLayout::renderEventSubnav($ev, 'events');
+        }
+        ?>
+        <form method="post" action="admin.php?module=events&action=<?= $isNew ? 'new' : 'edit&id=' . $id ?>" enctype="multipart/form-data">
+            <?= Auth::csrfField() ?>
+
+            <?php if ($isNew): ?>
+                <div class="card">
+                    <div class="card-header"><h2>🔁 Einstellungen, Felder & Listen übernehmen</h2></div>
+                    <div class="card-body">
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label for="clone_from_event_id">Vorlage für Teilnehmergruppen, Formularfelder und Auswertungslisten</label>
+                            <select id="clone_from_event_id" name="clone_from_event_id">
+                                <option value="0">📐 Aus globaler Standard-Vorlage starten (SC, NSC, Team + Standardfelder)</option>
+                                <?php foreach ($allEvents as $other): ?>
+                                    <option value="<?= (int)$other['id'] ?>">
+                                        📋 Komplett übernehmen von: <?= e($other['title']) ?> (<?= e(format_date($other['start_date'])) ?>)
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <div class="help-text">Alle Formularfelder, Teilnehmergruppen und gespeicherten Listen der gewählten Veranstaltung werden automatisch in die neue Veranstaltung kopiert.</div>
+                        </div>
+                    </div>
+                </div>
+            <?php else: ?>
+                <div class="card">
+                    <div class="card-header"><h2>🔗 Direktlinks zur Online-Anmeldung</h2></div>
+                    <div class="card-body">
+                        <div class="grid-2">
+                            <div>
+                                <label>Öffentlicher Anmeldelink:</label>
+                                <input type="text" readonly value="<?= e($regUrl) ?>" onclick="this.select()">
+                            </div>
+                            <div>
+                                <label>Geheim-Link (Anmeldung trotz Sperre / ausgebuchter Plätze):</label>
+                                <input type="text" readonly value="<?= e($secretUrl) ?>" onclick="this.select()">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            <?php endif; ?>
+
+            <div class="card">
+                <div class="card-header"><h2>1. Basisdaten & Zeitraum</h2></div>
+                <div class="card-body">
+                    <div class="grid-2">
+                        <div class="form-group">
+                            <label for="title">Veranstaltungsname (z. B. „Roots VII“)*</label>
+                            <input type="text" id="title" name="title" value="<?= e($ev['title']) ?>" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="subtitle">Untertitel (z. B. „Das Blut des Lebens“)</label>
+                            <input type="text" id="subtitle" name="subtitle" value="<?= e($ev['subtitle']) ?>">
+                        </div>
+                    </div>
+                    <div class="grid-2">
+                        <div class="form-group">
+                            <label for="start_date">Beginn-Datum*</label>
+                            <input type="date" id="start_date" name="start_date" value="<?= e($ev['start_date']) ?>" required>
+                            <div class="help-text">Stichtag für die automatische U18-Minderjährigen-Berechnung.</div>
+                        </div>
+                        <div class="form-group">
+                            <label for="end_date">End-Datum*</label>
+                            <input type="date" id="end_date" name="end_date" value="<?= e($ev['end_date']) ?>" required>
+                        </div>
+                    </div>
+                    <div class="grid-3">
+                        <div class="form-group">
+                            <label for="location_prefix">Orts-Vorsatz (z. B. „in der“)</label>
+                            <input type="text" id="location_prefix" name="location_prefix" value="<?= e($ev['location_prefix']) ?>">
+                        </div>
+                        <div class="form-group">
+                            <label for="location">Veranstaltungsort (z. B. „Burg Bilstein“)</label>
+                            <input type="text" id="location" name="location" value="<?= e($ev['location']) ?>">
+                        </div>
+                        <div class="form-group">
+                            <label for="location_suffix">Orts-Nachsatz (z. B. „im Sauerland“)</label>
+                            <input type="text" id="location_suffix" name="location_suffix" value="<?= e($ev['location_suffix']) ?>">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><h2>2. Freischaltung, Startseite & Zweisprachigkeit</h2></div>
+                <div class="card-body">
+                    <div class="grid-3">
+                        <div class="form-group">
+                            <label for="status">Anmeldestatus</label>
+                            <select id="status" name="status">
+                                <option value="open" <?= $ev['status'] === 'open' ? 'selected' : '' ?>>🟢 Anmeldung geöffnet</option>
+                                <option value="locked" <?= $ev['status'] === 'locked' ? 'selected' : '' ?>>🔴 Anmeldung gesperrt (nur mit Geheimlink)</option>
+                            </select>
+                            <div class="help-text">Einzelne Gruppen (z. B. SC voll) kannst du unter „Teilnehmergruppen“ sperren.</div>
+                        </div>
+                        <div class="form-group">
+                            <label for="unlock_password">Geheimlink-Entsperrungspasswort</label>
+                            <input type="text" id="unlock_password" name="unlock_password" value="<?= e($ev['unlock_password']) ?>">
+                        </div>
+                        <div class="form-group">
+                            <label for="admin_email">Orga-Kontakt- & Benachrichtigungs-E-Mail</label>
+                            <input type="email" id="admin_email" name="admin_email" value="<?= e($ev['admin_email']) ?>">
+                        </div>
+                    </div>
+
+                    <div class="grid-3" style="margin-top:0.5rem;">
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" name="show_on_index" value="1" <?= (int)$ev['show_on_index'] === 1 ? 'checked' : '' ?>>
+                                Auf der öffentlichen Startseite anzeigen
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" name="is_bilingual" value="1" <?= (int)$ev['is_bilingual'] === 1 ? 'checked' : '' ?>>
+                                🌐 Zweisprachige Anmeldung (Deutsch & Englisch)
+                            </label>
+                            <div class="help-text">Aktiviert den Sprachumschalter und die Pflichtprüfung in der Übersetzungstabelle.</div>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" name="show_countdown" value="1" <?= (int)$ev['show_countdown'] === 1 ? 'checked' : '' ?>>
+                                ⏳ Countdown auf Startseite anzeigen
+                            </label>
+                            <input type="datetime-local" name="countdown_target" value="<?= !empty($ev['countdown_target']) ? e(date('Y-m-d\TH:i', strtotime((string)$ev['countdown_target']))) : '' ?>" style="margin-top:0.35rem;">
+                        </div>
+                    </div>
+
+                    <div class="grid-2">
+                        <div class="form-group">
+                            <label for="flyer_url">Link zum Flyer / Ausschreibung (optional)</label>
+                            <input type="url" id="flyer_url" name="flyer_url" value="<?= e($ev['flyer_url']) ?>" placeholder="https://...">
+                        </div>
+                        <div class="form-group">
+                            <label for="forum_url">Link zum Veranstaltungs-Forum (optional)</label>
+                            <input type="url" id="forum_url" name="forum_url" value="<?= e($ev['forum_url']) ?>" placeholder="https://...">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header"><h2>3. Design, Theme & Veranstaltungs-Header über der Anmeldung</h2></div>
+                <div class="card-body">
+                    <div class="grid-2">
+                        <div class="form-group">
+                            <label for="theme">Theme für diese Veranstaltung</label>
+                            <select id="theme" name="theme">
+                                <option value="">🎨 Globales Standard-Theme der Webseite verwenden</option>
+                                <?php foreach ($themes as $slug => $tMeta): ?>
+                                    <option value="<?= e($slug) ?>" <?= ($ev['theme'] ?? '') === $slug ? 'selected' : '' ?>>
+                                        <?= e($tMeta['name']) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <div class="help-text">Überschreibt das globale Seitentheme beim Aufruf dieses Anmeldeformulars.</div>
+                        </div>
+                        <div class="form-group">
+                            <label for="header_logo">Optionales Veranstaltungs-Logo im Header</label>
+                            <input type="file" id="header_logo" name="header_logo" accept=".png,.jpg,.jpeg,.gif,.webp,.svg">
+                            <?php if (!empty($ev['header_logo_path'])): ?>
+                                <div style="margin-top:0.5rem;display:flex;align-items:center;gap:1rem;">
+                                    <img src="<?= e($ev['header_logo_path']) ?>" alt="Logo" style="max-height:48px;border-radius:4px;border:1px solid #cbd5e1;">
+                                    <label style="font-weight:400;margin:0;">
+                                        <input type="checkbox" name="remove_header_logo" value="1"> Logo entfernen
+                                    </label>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <div class="grid-2">
+                        <div class="form-group">
+                            <label for="header_text_de">Optionaler Textblock im Header über der Anmeldung (Deutsch)</label>
+                            <textarea id="header_text_de" name="header_text_de" rows="3" placeholder="Wichtige Hinweise, Einleitungstext oder IT-Stimmungstext über dem Formular..."><?= e($ev['header_text_de']) ?></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="header_text_en">Optionaler Textblock im Header über der Anmeldung (Englisch)</label>
+                            <textarea id="header_text_en" name="header_text_en" rows="3" placeholder="Optional header text in English..."><?= e($ev['header_text_en']) ?></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-bottom:2rem;">
+                <button type="submit" class="btn btn-primary" style="font-size:1rem;padding:0.7rem 1.5rem;">
+                    💾 <?= $isNew ? 'Veranstaltung jetzt anlegen' : 'Änderungen speichern' ?>
+                </button>
+                <a href="admin.php" class="btn btn-secondary" style="margin-left:0.5rem;">Zurück zur Übersicht</a>
+            </div>
+        </form>
+
+        <?php if (!$isNew): ?>
+            <div class="card" style="border-color:#fca5a5;">
+                <div class="card-header" style="background:#fef2f2;">
+                    <h2 style="color:#991b1b;">⚠️ Gefahrenzone: Veranstaltung komplett löschen</h2>
+                </div>
+                <div class="card-body">
+                    <form method="post" action="admin.php?module=events&action=delete&id=<?= $id ?>" onsubmit="return confirm('Veranstaltung samt aller Anmeldungen wirklich unwiderruflich löschen?');">
+                        <?= Auth::csrfField() ?>
+                        <p style="margin-top:0;">Um diese Veranstaltung inklusive aller eingegangenen Anmeldungen unwiderruflich zu löschen, tippe <strong>LÖSCHEN</strong> in das Feld:</p>
+                        <div style="display:flex;gap:0.75rem;max-width:420px;">
+                            <input type="text" name="confirm_text" placeholder="LÖSCHEN" required>
+                            <button type="submit" class="btn btn-danger">Endgültig löschen</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        <?php endif; ?>
+        <?php
+        AdminLayout::render($isNew ? 'Neue Veranstaltung anlegen' : 'Veranstaltung bearbeiten: ' . $ev['title'], 'events', (string)ob_get_clean(), $isNew ? null : $id);
+    }
+
+    public static function handleGroups(): void
+    {
+        if (!Auth::isAdmin()) {
+            header('Location: admin.php');
+            exit;
+        }
+
+        $eventId = (int)($_REQUEST['event_id'] ?? 0);
+        $event   = $eventId > 0 ? EventRepository::find($eventId) : null;
+        if (!$event) {
+            header('Location: admin.php');
+            exit;
+        }
+
+        $tGroups = Database::table('event_groups');
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            Auth::requireCsrf();
+            $subAction = (string)($_POST['sub_action'] ?? '');
+
+            if ($subAction === 'save_all') {
+                foreach ($_POST['groups'] ?? [] as $gid => $gData) {
+                    $gid = (int)$gid;
+                    $overrideRaw = trim((string)($gData['manual_free_override'] ?? ''));
+                    $overrideVal = ($overrideRaw === '') ? null : max(0, (int)$overrideRaw);
+
+                    Database::query(
+                        "UPDATE {$tGroups} SET
+                         name_de = :nde, name_en = :nen, max_seats = :max,
+                         manual_free_override = :ovr, is_locked = :lck, show_on_index = :sidx, sort_order = :sort
+                         WHERE id = :id AND event_id = :eid",
+                        [
+                            'nde'  => trim((string)($gData['name_de'] ?? 'Gruppe')),
+                            'nen'  => trim((string)($gData['name_en'] ?? '')),
+                            'max'  => max(0, (int)($gData['max_seats'] ?? 0)),
+                            'ovr'  => $overrideVal,
+                            'lck'  => isset($gData['is_locked']) ? 1 : 0,
+                            'sidx' => isset($gData['show_on_index']) ? 1 : 0,
+                            'sort' => (int)($gData['sort_order'] ?? 10),
+                            'id'   => $gid,
+                            'eid'  => $eventId,
+                        ]
+                    );
+                }
+                $_SESSION['flash_success'] = 'Teilnehmergruppen und Platzkontingente wurden aktualisiert.';
+            } elseif ($subAction === 'add_group') {
+                $nameDe = trim((string)($_POST['new_name_de'] ?? ''));
+                if ($nameDe !== '') {
+                    Database::query(
+                        "INSERT INTO {$tGroups} (event_id, name_de, name_en, max_seats, show_on_index, sort_order)
+                         VALUES (:eid, :nde, :nen, :max, :sidx, :sort)",
+                        [
+                            'eid'  => $eventId,
+                            'nde'  => $nameDe,
+                            'nen'  => trim((string)($_POST['new_name_en'] ?? '')),
+                            'max'  => max(0, (int)($_POST['new_max_seats'] ?? 0)),
+                            'sidx' => isset($_POST['new_show_on_index']) ? 1 : 0,
+                            'sort' => (int)($_POST['new_sort_order'] ?? 40),
+                        ]
+                    );
+                    $_SESSION['flash_success'] = "Teilnehmergruppe „{$nameDe}“ wurde hinzugefügt.";
+                }
+            } elseif ($subAction === 'delete_group') {
+                $delId = (int)($_POST['delete_id'] ?? 0);
+                Database::query("DELETE FROM {$tGroups} WHERE id = :id AND event_id = :eid", ['id' => $delId, 'eid' => $eventId]);
+                $_SESSION['flash_success'] = 'Teilnehmergruppe wurde entfernt.';
+            }
+
+            header("Location: admin.php?module=groups&event_id={$eventId}");
+            exit;
+        }
+
+        $groups = EventRepository::getGroupsWithSeats($eventId);
+
+        ob_start();
+        echo AdminLayout::renderEventSubnav($event, 'groups');
+        ?>
+        <div class="card">
+            <div class="card-header">
+                <h2>🎟️ Teilnehmergruppen & automatische Platzberechnung</h2>
+            </div>
+            <div class="card-body">
+                <p style="margin-top:0;color:#475569;font-size:0.9rem;">
+                    Die freien Plätze auf der Startseite und im Anmeldeformular werden automatisch aus <strong>Max. Plätze minus bestätigte Anmeldungen</strong> berechnet (bei <code>0</code> = unbegrenzt).
+                    Falls du den angezeigten Stand manuell überschreiben möchtest, trage eine Zahl in <strong>„Manueller Override“</strong> ein (leer lassen für Automatik).
+                </p>
+
+                <form method="post" action="admin.php?module=groups&event_id=<?= $eventId ?>">
+                    <?= Auth::csrfField() ?>
+                    <input type="hidden" name="sub_action" value="save_all">
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Sort.</th>
+                                    <th>Bezeichnung (DE)*</th>
+                                    <th>Bezeichnung (EN)</th>
+                                    <th>Max. Plätze (0 = unbegrenzt)</th>
+                                    <th>Bestätigte Anm.</th>
+                                    <th>Manueller Override (Freie Plätze)</th>
+                                    <th>Aktuell angezeigt</th>
+                                    <th>Auf Startseite</th>
+                                    <th>Gruppe voll / gesperrt</th>
+                                    <th>Löschen</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($groups as $g):
+                                    $gid = (int)$g['id'];
+                                ?>
+                                    <tr>
+                                        <td style="width:70px;">
+                                            <input type="number" name="groups[<?= $gid ?>][sort_order]" value="<?= (int)$g['sort_order'] ?>">
+                                        </td>
+                                        <td>
+                                            <input type="text" name="groups[<?= $gid ?>][name_de]" value="<?= e($g['name_de']) ?>" required>
+                                        </td>
+                                        <td>
+                                            <input type="text" name="groups[<?= $gid ?>][name_en]" value="<?= e($g['name_en']) ?>">
+                                        </td>
+                                        <td style="width:120px;">
+                                            <input type="number" min="0" name="groups[<?= $gid ?>][max_seats]" value="<?= (int)$g['max_seats'] ?>">
+                                        </td>
+                                        <td>
+                                            <strong><?= (int)$g['confirmed_count'] ?></strong> <span style="color:#64748b;">(ges. <?= (int)$g['total_count'] ?>)</span>
+                                        </td>
+                                        <td style="width:140px;">
+                                            <input type="number" min="0" name="groups[<?= $gid ?>][manual_free_override]" value="<?= $g['manual_free_override'] !== null ? (int)$g['manual_free_override'] : '' ?>" placeholder="Automatik">
+                                        </td>
+                                        <td>
+                                            <?php if ($g['is_full']): ?>
+                                                <span class="badge badge-red">Ausgebucht</span>
+                                            <?php elseif ($g['calculated_free'] !== null): ?>
+                                                <span class="badge badge-green"><?= (int)$g['calculated_free'] ?> frei <?= $g['is_overridden'] ? '(Override)' : '(Auto)' ?></span>
+                                            <?php else: ?>
+                                                <span class="badge badge-gray">Unbegrenzt</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td style="text-align:center;">
+                                            <input type="checkbox" name="groups[<?= $gid ?>][show_on_index]" value="1" <?= (int)$g['show_on_index'] === 1 ? 'checked' : '' ?>>
+                                        </td>
+                                        <td style="text-align:center;">
+                                            <input type="checkbox" name="groups[<?= $gid ?>][is_locked]" value="1" <?= (int)$g['is_locked'] === 1 ? 'checked' : '' ?>>
+                                        </td>
+                                        <td>
+                                            <?php if ((int)$g['total_count'] === 0): ?>
+                                                <button type="submit" name="sub_action" value="delete_group" onclick="document.getElementById('del_gid').value='<?= $gid ?>';return confirm('Gruppe löschen?');" class="btn btn-danger btn-sm">✕</button>
+                                            <?php else: ?>
+                                                <span style="font-size:0.78rem;color:#94a3b8;" title="Bereits Anmeldungen vorhanden">Belegt</span>
+                                            <?php endif; ?>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                    <input type="hidden" id="del_gid" name="delete_id" value="0">
+                    <div style="margin-top:1rem;">
+                        <button type="submit" class="btn btn-primary">💾 Alle Gruppen speichern</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><h2>➕ Weitere Teilnehmergruppe hinzufügen</h2></div>
+            <div class="card-body">
+                <form method="post" action="admin.php?module=groups&event_id=<?= $eventId ?>">
+                    <?= Auth::csrfField() ?>
+                    <input type="hidden" name="sub_action" value="add_group">
+                    <div class="grid-3">
+                        <div class="form-group">
+                            <label>Bezeichnung (Deutsch)*</label>
+                            <input type="text" name="new_name_de" placeholder="z. B. Tagesgast / Kinder / Küche" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Bezeichnung (Englisch)</label>
+                            <input type="text" name="new_name_en" placeholder="e.g. Day Guest / Youth">
+                        </div>
+                        <div class="form-group">
+                            <label>Max. Plätze (0 = unbegrenzt)</label>
+                            <input type="number" min="0" name="new_max_seats" value="0">
+                        </div>
+                    </div>
+                    <label style="font-weight:400;margin-bottom:1rem;">
+                        <input type="checkbox" name="new_show_on_index" value="1" checked> Freie Plätze dieser Gruppe auf der Startseite anzeigen
+                    </label>
+                    <div>
+                        <button type="submit" class="btn btn-secondary">➕ Gruppe anlegen</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <?php
+        AdminLayout::render('Teilnehmergruppen & Kontingente: ' . $event['title'], 'groups', (string)ob_get_clean(), $eventId);
+    }
+}

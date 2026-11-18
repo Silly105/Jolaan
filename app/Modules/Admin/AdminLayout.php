@@ -1,0 +1,434 @@
+<?php
+declare(strict_types=1);
+
+namespace App\Modules\Admin;
+
+use App\Core\Auth;
+use App\Core\Database;
+
+class AdminLayout
+{
+    public static function renderLogin(string $error = ''): void
+    {
+        $siteTitle = (string)Database::getSetting('site_title', 'Con-Management');
+        ?>
+        <!DOCTYPE html>
+        <html lang="de">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Orga-Login – <?= e($siteTitle) ?></title>
+            <style>
+                *, *::before, *::after { box-sizing: border-box; }
+                body {
+                    margin: 0;
+                    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+                    background: #1e2920;
+                    color: #1e293b;
+                    min-height: 100vh;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 1.5rem;
+                }
+                .login-card {
+                    width: 100%;
+                    max-width: 420px;
+                    background: #ffffff;
+                    border-radius: 10px;
+                    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+                    overflow: hidden;
+                }
+                .login-header {
+                    background: #243b29;
+                    color: #ffffff;
+                    padding: 1.5rem 1.75rem;
+                    border-bottom: 4px solid #739757;
+                }
+                .login-header h1 { margin: 0; font-size: 1.3rem; }
+                .login-header p { margin: 0.25rem 0 0 0; opacity: 0.85; font-size: 0.88rem; }
+                .login-body { padding: 1.75rem; }
+                .form-group { margin-bottom: 1.1rem; }
+                label { display: block; font-weight: 600; font-size: 0.9rem; margin-bottom: 0.35rem; }
+                input {
+                    width: 100%;
+                    padding: 0.6rem 0.8rem;
+                    border: 1px solid #cbd5e1;
+                    border-radius: 6px;
+                    font-size: 0.95rem;
+                }
+                input:focus { outline: none; border-color: #255E00; box-shadow: 0 0 0 3px rgba(37, 94, 0, 0.15); }
+                .btn {
+                    width: 100%;
+                    background: #255E00;
+                    color: #ffffff;
+                    border: none;
+                    padding: 0.7rem;
+                    font-size: 1rem;
+                    font-weight: 600;
+                    border-radius: 6px;
+                    cursor: pointer;
+                }
+                .btn:hover { background: #1a4300; }
+                .err {
+                    background: #fef2f2;
+                    border: 1px solid #f87171;
+                    color: #991b1b;
+                    padding: 0.75rem 1rem;
+                    border-radius: 6px;
+                    margin-bottom: 1rem;
+                    font-size: 0.9rem;
+                }
+                .back-link { display: block; text-align: center; margin-top: 1.25rem; font-size: 0.88rem; color: #255E00; text-decoration: none; }
+            </style>
+        </head>
+        <body>
+            <div class="login-card">
+                <div class="login-header">
+                    <h1><?= e($siteTitle) ?></h1>
+                    <p>Orga- & Administrations-Login</p>
+                </div>
+                <div class="login-body">
+                    <?php if ($error !== ''): ?>
+                        <div class="err"><?= e($error) ?></div>
+                    <?php endif; ?>
+                    <form method="post" action="admin.php?action=login">
+                        <?= Auth::csrfField() ?>
+                        <div class="form-group">
+                            <label for="email">E-Mail-Adresse</label>
+                            <input type="email" id="email" name="email" required autofocus>
+                        </div>
+                        <div class="form-group">
+                            <label for="password">Passwort</label>
+                            <input type="password" id="password" name="password" required>
+                        </div>
+                        <button type="submit" class="btn">Anmelden</button>
+                    </form>
+                    <a href="index.php" class="back-link">&larr; Zurück zur öffentlichen Startseite</a>
+                </div>
+            </div>
+        </body>
+        </html>
+        <?php
+    }
+
+    public static function render(string $title, string $activeModule, string $contentHtml, ?int $activeEventId = null): void
+    {
+        $user = Auth::user();
+        $isAdmin = Auth::isAdmin();
+        $siteTitle = (string)Database::getSetting('site_title', 'Con-Management');
+
+        $flashSuccess = $_SESSION['flash_success'] ?? '';
+        $flashError   = $_SESSION['flash_error'] ?? '';
+        unset($_SESSION['flash_success'], $_SESSION['flash_error']);
+        ?>
+        <!DOCTYPE html>
+        <html lang="de">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title><?= e($title) ?> – Orga-Backend</title>
+            <style>
+                *, *::before, *::after { box-sizing: border-box; }
+                body {
+                    margin: 0;
+                    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+                    font-size: 15px;
+                    line-height: 1.5;
+                    background: #f1f5f9;
+                    color: #0f172a;
+                    display: flex;
+                    min-height: 100vh;
+                }
+                /* Sidebar */
+                .sidebar {
+                    width: 260px;
+                    background: #1e2e22;
+                    color: #e2e8f0;
+                    display: flex;
+                    flex-direction: column;
+                    flex-shrink: 0;
+                }
+                .sidebar-brand {
+                    padding: 1.25rem 1.35rem;
+                    background: #162219;
+                    border-bottom: 3px solid #739757;
+                }
+                .sidebar-brand a { color: #ffffff; text-decoration: none; font-weight: 700; font-size: 1.15rem; display: block; }
+                .sidebar-brand span { font-size: 0.78rem; color: #a7f3d0; display: block; margin-top: 0.15rem; }
+                .nav-section {
+                    padding: 1rem 1.35rem 0.35rem;
+                    font-size: 0.74rem;
+                    text-transform: uppercase;
+                    letter-spacing: 0.06em;
+                    color: #94a3b8;
+                    font-weight: 700;
+                }
+                .side-nav { list-style: none; margin: 0; padding: 0; }
+                .side-nav li a {
+                    display: flex;
+                    align-items: center;
+                    gap: 0.6rem;
+                    padding: 0.62rem 1.35rem;
+                    color: #cbd5e1;
+                    text-decoration: none;
+                    font-weight: 500;
+                    border-left: 3px solid transparent;
+                }
+                .side-nav li a:hover { background: rgba(255,255,255,0.06); color: #ffffff; }
+                .side-nav li a.active {
+                    background: rgba(115, 151, 87, 0.22);
+                    color: #ffffff;
+                    border-left-color: #84cc16;
+                    font-weight: 600;
+                }
+                .sidebar-footer {
+                    margin-top: auto;
+                    padding: 1rem 1.35rem;
+                    background: #162219;
+                    font-size: 0.84rem;
+                    border-top: 1px solid rgba(255,255,255,0.08);
+                }
+                .sidebar-footer a { color: #fca5a5; text-decoration: none; font-weight: 600; }
+                /* Main Area */
+                .main-area {
+                    flex: 1;
+                    display: flex;
+                    flex-direction: column;
+                    min-width: 0;
+                }
+                .topbar {
+                    background: #ffffff;
+                    border-bottom: 1px solid #cbd5e1;
+                    padding: 0.9rem 1.75rem;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    gap: 1rem;
+                }
+                .topbar h1 { margin: 0; font-size: 1.3rem; color: #1e293b; }
+                .content-wrap { padding: 1.75rem; max-width: 1400px; width: 100%; }
+                /* Cards & Tables */
+                .card {
+                    background: #ffffff;
+                    border: 1px solid #cbd5e1;
+                    border-radius: 8px;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+                    margin-bottom: 1.5rem;
+                    overflow: hidden;
+                }
+                .card-header {
+                    padding: 0.95rem 1.35rem;
+                    background: #f8fafc;
+                    border-bottom: 1px solid #e2e8f0;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    flex-wrap: wrap;
+                    gap: 0.75rem;
+                }
+                .card-header h2 { margin: 0; font-size: 1.08rem; color: #0f172a; }
+                .card-body { padding: 1.35rem; }
+                .table-responsive { overflow-x: auto; }
+                table.data-table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    font-size: 0.9rem;
+                }
+                table.data-table th, table.data-table td {
+                    padding: 0.65rem 0.85rem;
+                    border-bottom: 1px solid #e2e8f0;
+                    text-align: left;
+                    vertical-align: middle;
+                }
+                table.data-table th {
+                    background: #f8fafc;
+                    font-weight: 600;
+                    color: #334155;
+                    white-space: nowrap;
+                }
+                table.data-table tr:hover td { background: #f8fafc; }
+                /* Forms & Buttons */
+                .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+                .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
+                .form-group { margin-bottom: 1rem; }
+                label { display: block; font-weight: 600; font-size: 0.88rem; margin-bottom: 0.3rem; color: #1e293b; }
+                .help-text { font-size: 0.8rem; color: #64748b; margin-top: 0.2rem; }
+                input[type="text"], input[type="email"], input[type="number"], input[type="date"], input[type="datetime-local"], input[type="password"], input[type="url"], select, textarea {
+                    width: 100%;
+                    padding: 0.5rem 0.7rem;
+                    border: 1px solid #cbd5e1;
+                    border-radius: 6px;
+                    font-size: 0.92rem;
+                    font-family: inherit;
+                    background: #fff;
+                }
+                input:focus, select:focus, textarea:focus {
+                    outline: none;
+                    border-color: #255E00;
+                    box-shadow: 0 0 0 3px rgba(37, 94, 0, 0.12);
+                }
+                .btn {
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 0.35rem;
+                    padding: 0.48rem 0.95rem;
+                    font-size: 0.88rem;
+                    font-weight: 600;
+                    border-radius: 6px;
+                    border: 1px solid transparent;
+                    cursor: pointer;
+                    text-decoration: none;
+                }
+                .btn-sm { padding: 0.3rem 0.65rem; font-size: 0.8rem; }
+                .btn-primary { background: #255E00; color: #fff; }
+                .btn-primary:hover { background: #1b4600; }
+                .btn-secondary { background: #fff; color: #334155; border-color: #cbd5e1; }
+                .btn-secondary:hover { background: #f1f5f9; }
+                .btn-danger { background: #dc2626; color: #fff; }
+                .btn-danger:hover { background: #b91c1c; }
+                .btn-warning { background: #d97706; color: #fff; }
+                .badge {
+                    display: inline-block;
+                    padding: 0.15rem 0.55rem;
+                    border-radius: 999px;
+                    font-size: 0.76rem;
+                    font-weight: 600;
+                }
+                .badge-green { background: #dcfce7; color: #166534; }
+                .badge-red { background: #fee2e2; color: #991b1b; }
+                .badge-amber { background: #fef3c7; color: #92400e; }
+                .badge-blue { background: #dbeafe; color: #1e40af; }
+                .badge-gray { background: #f1f5f9; color: #475569; }
+                .alert {
+                    padding: 0.85rem 1.15rem;
+                    border-radius: 6px;
+                    margin-bottom: 1.25rem;
+                    font-weight: 500;
+                }
+                .alert-success { background: #dcfce7; border: 1px solid #86efac; color: #166534; }
+                .alert-danger { background: #fee2e2; border: 1px solid #fca5a5; color: #991b1b; }
+                .subnav-tabs {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 0.4rem;
+                    margin-bottom: 1.35rem;
+                    border-bottom: 2px solid #cbd5e1;
+                    padding-bottom: 0.5rem;
+                }
+                .subnav-tabs a {
+                    padding: 0.45rem 0.95rem;
+                    border-radius: 6px;
+                    text-decoration: none;
+                    font-weight: 600;
+                    font-size: 0.88rem;
+                    color: #334155;
+                    background: #e2e8f0;
+                }
+                .subnav-tabs a.active, .subnav-tabs a:hover {
+                    background: #255E00;
+                    color: #ffffff;
+                }
+                @media (max-width: 900px) {
+                    body { flex-direction: column; }
+                    .sidebar { width: 100%; }
+                    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+                }
+            </style>
+        </head>
+        <body>
+            <aside class="sidebar">
+                <div class="sidebar-brand">
+                    <a href="admin.php"><?= e($siteTitle) ?></a>
+                    <span>Orga- & Admin-Backend</span>
+                </div>
+
+                <div class="nav-section">Veranstaltungen & Orga</div>
+                <ul class="side-nav">
+                    <li><a href="admin.php?module=dashboard" class="<?= $activeModule === 'dashboard' ? 'active' : '' ?>">📊 Übersicht / Cons</a></li>
+                    <?php if ($activeEventId): ?>
+                        <li><a href="admin.php?module=registrations&event_id=<?= $activeEventId ?>" class="<?= $activeModule === 'registrations' ? 'active' : '' ?>">👥 Teilnehmerverwaltung</a></li>
+                        <li><a href="admin.php?module=lists&event_id=<?= $activeEventId ?>" class="<?= $activeModule === 'lists' ? 'active' : '' ?>">📋 Listen, Filter & Export</a></li>
+                        <?php if ($isAdmin): ?>
+                            <li><a href="admin.php?module=events&action=edit&id=<?= $activeEventId ?>" class="<?= $activeModule === 'events' ? 'active' : '' ?>">⚙️ Con-Einstellungen & Design</a></li>
+                            <li><a href="admin.php?module=groups&event_id=<?= $activeEventId ?>" class="<?= $activeModule === 'groups' ? 'active' : '' ?>">🎟️ Teilnehmergruppen & Plätze</a></li>
+                            <li><a href="admin.php?module=formbuilder&event_id=<?= $activeEventId ?>" class="<?= $activeModule === 'formbuilder' ? 'active' : '' ?>">🧩 Formular-Baukasten</a></li>
+                            <li><a href="admin.php?module=translations&event_id=<?= $activeEventId ?>" class="<?= $activeModule === 'translations' ? 'active' : '' ?>">🌐 Übersetzungstabelle (DE/EN)</a></li>
+                        <?php endif; ?>
+                    <?php else: ?>
+                        <li><a href="admin.php?module=lists" class="<?= $activeModule === 'lists' ? 'active' : '' ?>">📋 Listen, Filter & Export</a></li>
+                    <?php endif; ?>
+                </ul>
+
+                <?php if ($isAdmin): ?>
+                    <div class="nav-section">Administration & Vorlagen</div>
+                    <ul class="side-nav">
+                        <li><a href="admin.php?module=events&action=new" class="<?= ($activeModule === 'events' && !$activeEventId) ? 'active' : '' ?>">➕ Neue Veranstaltung</a></li>
+                        <li><a href="admin.php?module=formbuilder&event_id=0" class="<?= ($activeModule === 'formbuilder' && !$activeEventId) ? 'active' : '' ?>">📐 Standard-Feldvorlagen</a></li>
+                        <li><a href="admin.php?module=gdpr" class="<?= $activeModule === 'gdpr' ? 'active' : '' ?>">🛡️ DSGVO-Center & Bereinigung</a></li>
+                        <li><a href="admin.php?module=mailtemplates" class="<?= $activeModule === 'mailtemplates' ? 'active' : '' ?>">✉️ E-Mail-Vorlagen</a></li>
+                        <li><a href="admin.php?module=users" class="<?= $activeModule === 'users' ? 'active' : '' ?>">🔑 Benutzer & Rollen</a></li>
+                        <li><a href="admin.php?module=settings" class="<?= $activeModule === 'settings' ? 'active' : '' ?>">🎨 Globales Design & System</a></li>
+                    </ul>
+                <?php endif; ?>
+
+                <div class="nav-section">Frontend</div>
+                <ul class="side-nav">
+                    <li><a href="index.php" target="_blank">🌍 Öffentliche Startseite &nearr;</a></li>
+                </ul>
+
+                <div class="sidebar-footer">
+                    <div>Angemeldet als <strong><?= e($user['name'] ?? '') ?></strong> (<?= e(strtoupper($user['role'] ?? '')) ?>)</div>
+                    <div style="margin-top:0.35rem;">
+                        <a href="admin.php?module=profile" style="color:#93c5fd;margin-right:0.75rem;">Passwort ändern</a>
+                        <a href="admin.php?action=logout">Abmelden</a>
+                    </div>
+                </div>
+            </aside>
+
+            <div class="main-area">
+                <header class="topbar">
+                    <h1><?= e($title) ?></h1>
+                    <div>
+                        <?php if ($activeEventId): ?>
+                            <a href="register.php?event_id=<?= $activeEventId ?>" target="_blank" class="btn btn-secondary btn-sm">
+                                🔗 Anmeldeformular öffnen &nearr;
+                            </a>
+                        <?php endif; ?>
+                    </div>
+                </header>
+                <main class="content-wrap">
+                    <?php if ($flashSuccess !== ''): ?>
+                        <div class="alert alert-success"><?= e($flashSuccess) ?></div>
+                    <?php endif; ?>
+                    <?php if ($flashError !== ''): ?>
+                        <div class="alert alert-danger"><?= e($flashError) ?></div>
+                    <?php endif; ?>
+                    <?= $contentHtml ?>
+                </main>
+            </div>
+        </body>
+        </html>
+        <?php
+    }
+
+    public static function renderEventSubnav(array $event, string $activeModule): string
+    {
+        $eid = (int)$event['id'];
+        $isAdmin = Auth::isAdmin();
+        ob_start();
+        ?>
+        <div class="subnav-tabs">
+            <a href="admin.php?module=registrations&event_id=<?= $eid ?>" class="<?= $activeModule === 'registrations' ? 'active' : '' ?>">👥 Teilnehmer (Anmeldungen)</a>
+            <a href="admin.php?module=lists&event_id=<?= $eid ?>" class="<?= $activeModule === 'lists' ? 'active' : '' ?>">📋 Listen, Filter & Druck</a>
+            <?php if ($isAdmin): ?>
+                <a href="admin.php?module=events&action=edit&id=<?= $eid ?>" class="<?= $activeModule === 'events' ? 'active' : '' ?>">⚙️ Einstellungen, Header & Theme</a>
+                <a href="admin.php?module=groups&event_id=<?= $eid ?>" class="<?= $activeModule === 'groups' ? 'active' : '' ?>">🎟️ Teilnehmergruppen & Plätze</a>
+                <a href="admin.php?module=formbuilder&event_id=<?= $eid ?>" class="<?= $activeModule === 'formbuilder' ? 'active' : '' ?>">🧩 Formular-Baukasten</a>
+                <a href="admin.php?module=translations&event_id=<?= $eid ?>" class="<?= $activeModule === 'translations' ? 'active' : '' ?>">🌐 Übersetzungstabelle (DE/EN)</a>
+            <?php endif; ?>
+        </div>
+        <?php
+        return (string)ob_get_clean();
+    }
+}

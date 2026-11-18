@@ -1,207 +1,189 @@
 <?php
-if(session_status() == PHP_SESSION_NONE){session_start();}
+declare(strict_types=1);
 
-require_once('i/western_design.php');
-require_once('i/mysql.php');
-require_once('validate.php');
-require_once('i/sprache.php');
+require_once __DIR__ . '/app/bootstrap.php';
 
-$content = "<p class='block1'>";
-$content .= $s_index_introtext;
-$content .= "   </p>";
-$content .= "   <p class='block1'>";
+use App\Core\Auth;
+use App\Core\Config;
+use App\Core\Database;
+use App\Core\I18n;
+use App\Core\Theme;
+use App\Modules\Events\EventRepository;
 
-connect2mysql();
-
-$mysql="SELECT `id`, `conname`, `conuntertitel`, `conlocation`, `conlocationvorsatz`, `conlocationnachsatz`, `datumbeginn`, DAYOFMONTH( datumbeginn ) AS beginntag , MONTH( datumbeginn ) AS beginnmonat , YEAR( datumbeginn ) AS beginnjahr, DAYOFMONTH( datumende ) AS endetag , MONTH( datumende ) AS endemonat , YEAR( datumende ) AS endejahr, `datumende`, `freisc`, `freinsc`, `flyeradresse`, `anmeldungsadresse`, `forumsadresse`, DATE_FORMAT( stand, '$s_index_mysqldatestring' ) AS stand2, `countdown`, `starttermin` FROM `conmanagement_aktuelletermine`;";
-$mysql = mysqli_query($link,$mysql);
-$num = mysqli_num_rows($mysql);
-
-if($num == '1')
-{
-  $aktuellesdatum = date("Y-m-d");
-  $qidatumbeginn = just_my_result($mysql, 0, "datumbeginn");
-  $qidatumende = just_my_result($mysql, 0, "datumende");
-
-  if(($qidatumbeginn <= $aktuellesdatum) && ($qidatumende >= $aktuellesdatum))
-  { //Wenn der Termin gerade laeuft
-    $content .= "<h4>$s_index_veranst_laeuft:</h4>";
-  }
-  elseif($qidatumbeginn >= $aktuellesdatum)
-  { //Wenn der Termin in der Zukunft liegt
-    $content .= "<h4>$s_index_veranst_aktuell:</h4>";
-  }
-}
-elseif($num == '0')
-{
-  $content .= "<h4>$s_index_veranst_keine</h4>";
-}
-elseif($num >= '2')
-{
-  $aktuellesdatum = date("Y-m-d");
-
-  $j = 0;
-  for($i='0'; $i < $num; $i++)
-  {
-    $qidatumbeginn = just_my_result($mysql, $i, "datumbeginn");
-    $qidatumende = just_my_result($mysql, $i, "datumende");
-    if($qidatumende < $aktuellesdatum)
-    { // wenn alle termine in der vergangenheit liegen
-      $j++;
-    }
-  }
-  if($num == $j)
-  {
-    $content .= "<h4>$s_index_veranst_keine</h4>";
-  }
-  else
-  {
-    $content .= "<h4>$s_index_veranst_aktuell:</h4>";
-  }
+if (!Config::isInstalled()) {
+    header('Location: install.php');
+    exit;
 }
 
-for($i='0'; $i < $num; $i++)
-{
-  $aktuellesdatum = date("Y-m-d");
-  $qicountdown = just_my_result($mysql, $i, "countdown");
-  $qistarttermin = just_my_result($mysql, $i, "starttermin");
-  $qidatumbeginn = just_my_result($mysql, $i, "datumbeginn");
-  $qidatumende = just_my_result($mysql, $i, "datumende");
-  $qiid = just_my_result($mysql, $i, "id");
-  $qiconname = just_my_result($mysql, $i, "conname");
-  $qiconuntertitel = just_my_result($mysql, $i, "conuntertitel");
-  $qiconlocation = just_my_result($mysql, $i, "conlocation");
-  $qiconlocationvorsatz = just_my_result($mysql, $i, "conlocationvorsatz");
-  $qiconlocationnachsatz = just_my_result($mysql, $i, "conlocationnachsatz");
-  $qibeginntag = just_my_result($mysql, $i, "beginntag");
-  $qibeginnmonat = just_my_result($mysql, $i, "beginnmonat");
-  $qibeginnjahr = just_my_result($mysql, $i, "beginnjahr");
-  $qiendetag = just_my_result($mysql, $i, "endetag");
-  $qiendemonat = just_my_result($mysql, $i, "endemonat");
-  $qiendejahr = just_my_result($mysql, $i, "endejahr");
-  $qifreisc = just_my_result($mysql, $i, "freisc");
-  $qifreinsc = just_my_result($mysql, $i, "freinsc");
-  $qiflyeradresse = just_my_result($mysql, $i, "flyeradresse");
-  $qianmeldungsadresse = just_my_result($mysql, $i, "anmeldungsadresse");
-  $qiforumsadresse = just_my_result($mysql, $i, "forumsadresse");
-  $qistand = just_my_result($mysql, $i, "stand2");
+I18n::init(true);
 
-  if($qibeginnmonat < '10')
-  {
-    $qibeginnmonat = "0".$qibeginnmonat;
-  }
-  if($qibeginntag < '10')
-  {
-    $qibeginntag = "0".$qibeginntag;
-  }
+$events = EventRepository::upcomingForIndex();
+$today = date('Y-m-d');
 
-  if($qiendemonat < '10')
-  {
-    $qiendemonat = "0".$qiendemonat;
-  }
-  if($qiendetag < '10')
-  {
-    $qiendetag = "0".$qiendetag;
-  }
+$runningEvents  = [];
+$upcomingEvents = [];
 
-  if($aktuellesdatum < $qidatumende)
-  {
-    $beginndatum = date($s_index_datestring, mktime(0, 0, 0, $qibeginnmonat, $qibeginntag, $qibeginnjahr));
-    $endedatum = date($s_index_datestring, mktime(0, 0, 0, $qiendemonat, $qiendetag, $qiendejahr));
-
-    $content .= "<p><b>$qiconname";
-    if($qiconuntertitel != '')
-    {
-      $content .= " - $qiconuntertitel";
+foreach ($events as $ev) {
+    $ev['groups'] = EventRepository::getGroupsWithSeats((int)$ev['id']);
+    if ($ev['start_date'] <= $today && $ev['end_date'] >= $today) {
+        $runningEvents[] = $ev;
+    } else {
+        $upcomingEvents[] = $ev;
     }
-    //$content .= "</b><br><b>$qibeginntag.$qibeginnmonat.$qibeginnjahr bis $qiendetag.$qiendemonat.$qiendejahr<br>";
-    //$content .= "$qiconlocationvorsatz $qiconlocation $qiconlocationnachsatz</b>";
-    $content .= "</b><br><b>$beginndatum - $endedatum<br>";
-    $content .= "$qiconlocation $qiconlocationnachsatz</b>";
-    if(($qiconlocationvorsatz != '') || ($qiconlocation != '') || ($qiconlocationnachsatz != ''))
-    {
-      $content .= "<br>";
-    }
-    if($qifreisc != '')
-    {
-      $content .= "$qifreisc $s_index_scplaetze&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
-      $content .= "$qifreinsc $s_index_nscplaetze&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;($s_index_stand: $qistand)<br>";
-    }
-    if($qiflyeradresse != '')
-    {
-      $content .= "<a href='$qiflyeradresse'>$s_index_zumflyer!</a>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
-    }
-    if($qianmeldungsadresse != '')
-    {
-      $content .= "<a href='$qianmeldungsadresse'>$s_index_zuranmeldung!</a>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;";
-    }
-    if($qiforumsadresse != '')
-    {
-      $content .= "<a href='$qiforumsadresse'>$s_index_zumforum!</a></p>";
-    }
-  }
-  if(validate("Administrator"))
-  {
-    $content .= "<p class='block2'><a href='editqi.php?qiid=$qiid'>$qiconname - Schnellinfo Bearbeiten</a></p>";
-  }
-
-  if(($qidatumbeginn >= $aktuellesdatum) && ($qicountdown == '1'))
-  { //Wenn der Termin in der Zukunft liegt
-    $content .= "
-
-    <script type='text/javascript'>
-    <!--
-    var now = new Date();
-    var end = new Date('$qistarttermin');
-
-
-//    document.write('<p class=\"block1\"><fieldset class=\"login\"><legend>Countdown</legend><div id=\"explain\"><b><span id=\"c1\"></span></b></div></fieldset></p><br><br>');
-//    document.write('<table border=\"1\" width=\"80%\" cellpadding=\"2\" cellspacing=\"0\"><tr><td><b><div align=\"left\"<span id=\"c1\"></span></div></b></td></tr></table>');
-    document.write(' <b>$s_countdown_noch <span id=\"c1\"></span></b>');
-
-    function toSt2(n) {
-      s = '';
-      if (n < 10) s += '0';
-      return (s + n).toString();
-    }
-    function toSt3(n) {
-      s = '';
-      if (n < 10) s += '00';
-      else if (n < 100) s += '0';
-      return (s + n).toString();
-    }
-    function countdown() {
-      d = new Date();
-      count = Math.floor(end.getTime() - d.getTime());
-      if(count > 0) {
-        miliseconds = toSt3(count%1000); count = Math.floor(count/1000);
-        seconds = toSt2(count%60); count = Math.floor(count/60);
-        minutes = toSt2(count%60); count = Math.floor(count/60);
-        hours = toSt2(count%24); count = Math.floor(count/24);
-        days = count;
-
-        dps = '$s_countdown_dps'; hps = '$s_countdown_hps'; mps = '$s_countdown_mps'; sps = '$s_countdown_sps';
-        if(days == 1) dps ='';
-        if(hours == 1) hps ='';
-        if(minutes == 1) mps ='';
-        if(seconds == 1) sps ='';
-
-        document.getElementById('c1').innerHTML = days + ' $s_countdown_d' + dps + ' ' + hours + ' $s_countdown_h' + hps + ' ' + minutes + ' $s_countdown_m' + mps + ' ' + seconds + ' $s_countdown_s' + sps + '';
-//        document.getElementById('c1').innerHTML = days + ' Tag' + dps + ', ' + hours + ' Stunde' + hps + ', ' + minutes + ' Minute' + mps + ' und ' + seconds + ' Sekunde' + sps + '';
-        setTimeout('countdown()', 50);
-      }
-    }
-    window.onload=countdown;
-    //-->
-    </script>
-    ";
-  }
 }
 
-$content .= "<br></p>";
+$introDe = (string)Database::getSetting('index_intro_de', 'Willkommen beim Online-Anmeldesystem! Hier findest du alle aktuellen Veranstaltungen und die Übersicht der freien Plätze.');
+$introEn = (string)Database::getSetting('index_intro_en', 'Welcome to our online registration system! Below you will find all upcoming events and available spots.');
+$introText = (I18n::isEnglish() && $introEn !== '') ? $introEn : $introDe;
 
-print_site($s_index_title,$content);
-
-disconnectmysql();
-
+ob_start();
 ?>
+
+<?php if ($introText !== ''): ?>
+    <p style="margin-top:0;margin-bottom:1.5rem;"><?= nl2br(e($introText)) ?></p>
+<?php endif; ?>
+
+<?php
+$renderEventCard = function (array $ev): void {
+    $lang = I18n::lang();
+    $startFormatted = format_date($ev['start_date'], $lang);
+    $endFormatted   = format_date($ev['end_date'], $lang);
+    $dateRange      = ($startFormatted === $endFormatted) ? $startFormatted : "{$startFormatted} – {$endFormatted}";
+    $locParts       = array_filter([$ev['location_prefix'], $ev['location'], $ev['location_suffix']], fn($p) => trim((string)$p) !== '');
+    $locationLine   = implode(' ', $locParts);
+    ?>
+    <div class="event-item">
+        <h2 class="event-title">
+            <?= e($ev['title']) ?>
+            <?php if (!empty($ev['subtitle'])): ?>
+                <span style="font-weight:400;opacity:0.85;"> – <?= e($ev['subtitle']) ?></span>
+            <?php endif; ?>
+        </h2>
+        <div class="event-meta">
+            📅 <?= e($dateRange) ?>
+            <?php if ($locationLine !== ''): ?>
+                &nbsp;&middot;&nbsp; 📍 <?= e($locationLine) ?>
+            <?php endif; ?>
+        </div>
+
+        <?php
+        $visibleGroups = array_filter($ev['groups'], fn($g) => (int)$g['show_on_index'] === 1);
+        if (!empty($visibleGroups)):
+        ?>
+            <div class="seats-grid">
+                <?php foreach ($visibleGroups as $g):
+                    $gName = I18n::field($g, 'name');
+                    $free  = $g['calculated_free'];
+                    $full  = (bool)$g['is_full'];
+                ?>
+                    <?php if ($full): ?>
+                        <span class="seat-badge full">
+                            <?= e($gName) ?>: <?= e(I18n::t('index.waitlist_full')) ?>
+                        </span>
+                    <?php elseif ($free !== null): ?>
+                        <span class="seat-badge">
+                            <?= e($gName) ?>: <strong><?= (int)$free ?></strong> <?= e(I18n::t('index.free_seats')) ?>
+                        </span>
+                    <?php else: ?>
+                        <span class="seat-badge">
+                            <?= e($gName) ?>
+                        </span>
+                    <?php endif; ?>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+
+        <?php if ((int)$ev['show_countdown'] === 1 && !empty($ev['countdown_target'])): ?>
+            <div class="countdown-box" data-countdown="<?= e(date('c', strtotime((string)$ev['countdown_target']))) ?>">
+                ⏳ <?= e(I18n::t('index.countdown_prefix')) ?>: <span class="cd-timer">…</span>
+            </div>
+        <?php endif; ?>
+
+        <div class="event-actions">
+            <?php if ($ev['status'] === 'open'): ?>
+                <a href="register.php?event_id=<?= (int)$ev['id'] ?>" class="btn btn-primary">
+                    ✍️ <?= e(I18n::t('index.to_registration')) ?>
+                </a>
+            <?php else: ?>
+                <span class="btn btn-secondary" style="opacity:0.75;cursor:default;">
+                    🔒 <?= e(I18n::t('index.reg_locked')) ?>
+                </span>
+            <?php endif; ?>
+
+            <?php if (!empty($ev['flyer_url'])): ?>
+                <a href="<?= e($ev['flyer_url']) ?>" target="_blank" rel="noopener" class="btn btn-secondary">
+                    📄 <?= e(I18n::t('index.to_flyer')) ?>
+                </a>
+            <?php endif; ?>
+
+            <?php if (!empty($ev['forum_url'])): ?>
+                <a href="<?= e($ev['forum_url']) ?>" target="_blank" rel="noopener" class="btn btn-secondary">
+                    💬 <?= e(I18n::t('index.to_forum')) ?>
+                </a>
+            <?php endif; ?>
+
+            <?php if (Auth::isOrga()): ?>
+                <a href="admin.php?module=registrations&event_id=<?= (int)$ev['id'] ?>" class="btn btn-secondary">
+                    ⚙️ Orga: Anmeldungen
+                </a>
+            <?php endif; ?>
+        </div>
+    </div>
+    <?php
+};
+?>
+
+<?php if (empty($runningEvents) && empty($upcomingEvents)): ?>
+    <div class="alert alert-info">
+        <?= e(I18n::t('index.no_events')) ?>
+    </div>
+<?php endif; ?>
+
+<?php if (!empty($runningEvents)): ?>
+    <h3 class="form-section-heading" style="margin-top:0;"><?= e(I18n::t('index.running_events')) ?></h3>
+    <?php foreach ($runningEvents as $ev) { $renderEventCard($ev); } ?>
+<?php endif; ?>
+
+<?php if (!empty($upcomingEvents)): ?>
+    <h3 class="form-section-heading" style="margin-top:0;"><?= e(I18n::t('index.upcoming_events')) ?></h3>
+    <?php foreach ($upcomingEvents as $ev) { $renderEventCard($ev); } ?>
+<?php endif; ?>
+
+<script>
+(function () {
+    const boxes = document.querySelectorAll('[data-countdown]');
+    if (!boxes.length) return;
+    const lblD = <?= json_encode(I18n::t('index.days')) ?>;
+    const lblH = <?= json_encode(I18n::t('index.hours')) ?>;
+    const lblM = <?= json_encode(I18n::t('index.minutes')) ?>;
+    const lblS = <?= json_encode(I18n::t('index.seconds')) ?>;
+
+    function updateCountdowns() {
+        const now = Date.now();
+        boxes.forEach(function (box) {
+            const target = Date.parse(box.getAttribute('data-countdown'));
+            const out = box.querySelector('.cd-timer');
+            if (!target || !out) return;
+            let diff = Math.floor((target - now) / 1000);
+            if (diff <= 0) {
+                box.style.display = 'none';
+                return;
+            }
+            const d = Math.floor(diff / 86400); diff %= 86400;
+            const h = Math.floor(diff / 3600);  diff %= 3600;
+            const m = Math.floor(diff / 60);
+            const s = diff % 60;
+            out.textContent = d + ' ' + lblD + ', ' +
+                String(h).padStart(2, '0') + ' ' + lblH + ', ' +
+                String(m).padStart(2, '0') + ' ' + lblM + ', ' +
+                String(s).padStart(2, '0') + ' ' + lblS;
+        });
+    }
+    updateCountdowns();
+    setInterval(updateCountdowns, 1000);
+})();
+</script>
+
+<?php
+$html = (string)ob_get_clean();
+Theme::render(I18n::t('index.welcome_title'), $html);

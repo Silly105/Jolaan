@@ -1,0 +1,17 @@
+# IDE & SFTP Zugangsdaten (NIEMALS committen!)
+.vscode/
+.idea/
+
+# Archiviertes Altsystem (falls innerhalb des Ordners abgelegt)
+_alt/
+
+# Sensible Konfigurationsdateien & Schlüssel des neuen Systems
+storage/config/config.php
+storage/config/secret.key
+storage/uploads/*
+!storage/uploads/.gitkeep
+
+# Betriebssystem-Dateien
+Thumbs.db
+.DS_Store
+Desktop.ini

@@ -1,0 +1,27 @@
+@import url('../base.css');
+
+:root {
+    --bg-body: #f1f5f9;
+    --text-color: #0f172a;
+    --text-muted: #475569;
+    --accent: #0f766e;
+    --accent-hover: #115e59;
+    --accent-border: #0d9488;
+    --header-bg: #0f172a;
+    --header-text: #f8fafc;
+    --nav-bg: #1e293b;
+    --nav-link: #cbd5e1;
+    --card-bg: #ffffff;
+    --card-border: #cbd5e1;
+    --card-header-bg: #0f766e;
+    --card-header-text: #ffffff;
+    --banner-bg: #f0fdfa;
+    --item-bg: #ffffff;
+    --badge-bg: #ccfbf1;
+    --badge-text: #0f766e;
+    --input-border: #94a3b8;
+    --btn-bg: #0f766e;
+    --btn-hover: #115e59;
+    --btn-text: #ffffff;
+    --radius: 10px;
+}

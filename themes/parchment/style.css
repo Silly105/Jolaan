@@ -1,0 +1,28 @@
+@import url('../base.css');
+
+:root {
+    --font-heading: Georgia, "Times New Roman", serif;
+    --bg-body: #f5ebd6;
+    --text-color: #2c1e14;
+    --text-muted: #5c4332;
+    --accent: #7c2d12;
+    --accent-hover: #581c08;
+    --accent-border: #b45309;
+    --header-bg: #3b2314;
+    --header-text: #fdf6e7;
+    --nav-bg: #4d2f1c;
+    --nav-link: #f5dec0;
+    --card-bg: #fdfaf2;
+    --card-border: #d6bfa2;
+    --card-header-bg: #78350f;
+    --card-header-text: #fef3c7;
+    --banner-bg: #f3e4c8;
+    --item-bg: #fffdf8;
+    --badge-bg: #f3e4c8;
+    --badge-text: #7c2d12;
+    --input-border: #bfa382;
+    --btn-bg: #7c2d12;
+    --btn-hover: #581c08;
+    --btn-text: #ffffff;
+    --radius: 6px;
+}
