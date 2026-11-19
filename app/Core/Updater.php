@@ -38,6 +38,18 @@ class Updater
     }
 
     /**
+     * Prüft direkt über PDO::query (ohne Prepared-Statement-Einschränkung von MySQL für SHOW COLUMNS),
+     * ob eine Spalte in einer Tabelle existiert.
+     */
+    private static function columnExists(string $tableSql, string $columnName): bool
+    {
+        $pdo = Database::connect();
+        $cleanCol = preg_replace('/[^a-zA-Z0-9_]/', '', $columnName);
+        $stmt = $pdo->query("SHOW COLUMNS FROM {$tableSql} LIKE '{$cleanCol}'");
+        return $stmt !== false && $stmt->fetch() !== false;
+    }
+
+    /**
      * Führt die spezifischen Datenbank-/System-Änderungen einer einzelnen Version aus.
      */
     private static function migrateTo(string $version): void
@@ -46,8 +58,7 @@ class Updater
 
         if ($version === '0.9.001') {
             $tEvents = Database::table('events');
-            $cols = Database::fetchAll("SHOW COLUMNS FROM {$tEvents} LIKE 'maps_url'");
-            if (empty($cols)) {
+            if (!self::columnExists($tEvents, 'maps_url')) {
                 $pdo->exec("ALTER TABLE {$tEvents} ADD COLUMN `maps_url` VARCHAR(500) NOT NULL DEFAULT '' AFTER `location_suffix`");
             }
 
@@ -64,21 +75,27 @@ class Updater
             $tVals   = Database::table('registration_values');
 
             // 1. 2FA-Spalten in users ergänzen
-            if (empty(Database::fetchAll("SHOW COLUMNS FROM {$tUsers} LIKE 'totp_secret'"))) {
+            if (!self::columnExists($tUsers, 'totp_secret')) {
                 $pdo->exec("ALTER TABLE {$tUsers}
-                    ADD COLUMN `totp_secret` VARCHAR(120) NULL DEFAULT NULL AFTER `is_active`,
+                    ADD COLUMN `totp_secret` VARCHAR(255) NULL DEFAULT NULL AFTER `is_active`,
                     ADD COLUMN `totp_enabled` TINYINT(1) NOT NULL DEFAULT 0 AFTER `totp_secret`,
                     ADD COLUMN `totp_backup_codes` TEXT NULL DEFAULT NULL AFTER `totp_enabled`");
             }
 
             // 2. Spalte is_encrypted in form_fields ergänzen und für E-Mail, Telefon & sensible Felder aktivieren
-            if (empty(Database::fetchAll("SHOW COLUMNS FROM {$tFields} LIKE 'is_encrypted'"))) {
+            if (!self::columnExists($tFields, 'is_encrypted')) {
                 $pdo->exec("ALTER TABLE {$tFields} ADD COLUMN `is_encrypted` TINYINT(1) NOT NULL DEFAULT 0 AFTER `is_required`");
                 $pdo->exec("UPDATE {$tFields} SET `is_encrypted` = 1 WHERE `is_sensitive` = 1 OR `field_type` = 'email' OR `system_mapping` = 'email' OR `field_key` IN ('email', 'telefon', 'handy', 'phone')");
             }
 
             // 3. Spalte email (Text für Chiffretext) & email_hash in registrations ergänzen
-            if (empty(Database::fetchAll("SHOW COLUMNS FROM {$tRegs} LIKE 'email_hash'"))) {
+            if (!self::columnExists($tRegs, 'email_hash')) {
+                // Alten Index idx_reg_email entfernen, falls vorhanden (da TEXT keinen vollen Index ohne Länge erlaubt)
+                try {
+                    $pdo->exec("ALTER TABLE {$tRegs} DROP INDEX `idx_reg_email`");
+                } catch (\Throwable) {
+                    // Index existierte nicht
+                }
                 $pdo->exec("ALTER TABLE {$tRegs} MODIFY COLUMN `email` TEXT NOT NULL");
                 $pdo->exec("ALTER TABLE {$tRegs} ADD COLUMN `email_hash` VARCHAR(64) NOT NULL DEFAULT '' AFTER `email`, ADD INDEX `idx_reg_email_hash` (`email_hash`)");
             }
