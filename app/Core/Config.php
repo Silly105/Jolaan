@@ -13,9 +13,23 @@ class Config
         return dirname(__DIR__, 2) . '/storage/config/config.php';
     }
 
-    public static function keyPath(): string
+    public static function defaultKeyPath(): string
     {
         return dirname(__DIR__, 2) . '/storage/config/secret.key';
+    }
+
+    /**
+     * Liefert den aktuellen Pfad zur Schlüsseldatei (entweder ein vom Admin konfigurierter Pfad
+     * außerhalb des Webroots oder der Standardpfad in storage/config/secret.key).
+     */
+    public static function keyPath(): string
+    {
+        self::load();
+        $custom = trim((string)(self::$config['custom_key_path'] ?? ''));
+        if ($custom !== '' && is_file($custom)) {
+            return $custom;
+        }
+        return self::defaultKeyPath();
     }
 
     public static function isInstalled(): bool

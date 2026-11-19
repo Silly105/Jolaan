@@ -5,10 +5,12 @@ require_once __DIR__ . '/app/bootstrap.php';
 
 use App\Core\Auth;
 use App\Core\Config;
+use App\Core\Crypto;
 use App\Core\Database;
 use App\Core\I18n;
 use App\Core\Mailer;
 use App\Core\Theme;
+use App\Core\Updater;
 use App\Modules\Events\EventRepository;
 use App\Modules\Registration\RegistrationRepository;
 
@@ -17,6 +19,7 @@ if (!Config::isInstalled()) {
     exit;
 }
 
+Updater::runPendingMigrations();
 Auth::initSession();
 
 $eventId = (int)($_REQUEST['event_id'] ?? $_REQUEST['conid'] ?? 0);
@@ -33,6 +36,7 @@ $allowEnglish = (int)$event['is_bilingual'] === 1;
 I18n::init($allowEnglish);
 
 $pageTitle = $event['title'] . (!empty($event['subtitle']) ? ' – ' . $event['subtitle'] : '') . ' (' . I18n::t('reg.title') . ')';
+$orgaContactEmail = trim((string)$event['admin_email']) ?: (string)Database::getSetting('mail_from_address', '');
 
 // 1. Double-Opt-In Bestätigungslink verarbeiten
 if ($action === 'confirm') {
@@ -56,19 +60,19 @@ if ($action === 'confirm') {
     }
 
     Database::query("UPDATE {$tRegs} SET is_confirmed = 1 WHERE id = :id", ['id' => $regId]);
+    $decryptedEmail = Crypto::decrypt((string)$reg['email']);
 
     // Benachrichtigung an die Orga senden
-    $adminEmail = trim((string)$event['admin_email']) ?: (string)Database::getSetting('mail_from_address', '');
-    if ($adminEmail !== '' && filter_var($adminEmail, FILTER_VALIDATE_EMAIL)) {
+    if ($orgaContactEmail !== '' && filter_var($orgaContactEmail, FILTER_VALIDATE_EMAIL)) {
         $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
         $host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
         $dir    = rtrim(dirname($_SERVER['PHP_SELF']), '/\\');
         $adminLink = "{$scheme}://{$host}{$dir}/admin.php?module=registrations&event_id={$eventId}&action=edit&id={$regId}";
         $orgaBody = "<p>Neue bestätigte Online-Anmeldung für <b>" . e($event['title']) . "</b>:</p>"
                   . "<ul><li><b>Name:</b> " . e($reg['first_name'] . ' ' . $reg['last_name']) . "</li>"
-                  . "<li><b>E-Mail:</b> " . e($reg['email']) . "</li></ul>"
+                  . "<li><b>E-Mail:</b> " . e($decryptedEmail) . "</li></ul>"
                   . "<p><a href=\"" . e($adminLink) . "\">Anmeldung im Orga-Backend ansehen &rarr;</a></p>";
-        Mailer::send($adminEmail, 'Neue Anmeldung: ' . $event['title'] . ' (' . $reg['first_name'] . ' ' . $reg['last_name'] . ')', $orgaBody);
+        Mailer::send($orgaContactEmail, 'Neue Anmeldung: ' . $event['title'] . ' (' . $reg['first_name'] . ' ' . $reg['last_name'] . ')', $orgaBody);
     }
 
     $msg = I18n::t('reg.doi_ok_text', $reg['first_name'] . ' ' . $reg['last_name'], $event['title']);
@@ -92,6 +96,9 @@ if ($event['status'] === 'locked' && !$isUnlockedBySecret) {
         <h3 style="margin-top:0;"><?= e(I18n::t('reg.locked_title')) ?></h3>
         <p><?= e(I18n::t('reg.locked_text')) ?></p>
     </div>
+    <?php if ($orgaContactEmail !== ''): ?>
+        <p><strong><?= e(I18n::t('reg.contact_prefix')) ?></strong> <a href="mailto:<?= e($orgaContactEmail) ?>"><?= e($orgaContactEmail) ?></a></p>
+    <?php endif; ?>
     <?php if ($event['unlock_password'] !== ''): ?>
         <form method="get" action="register.php" style="margin-top:1.25rem;max-width:420px;">
             <input type="hidden" name="event_id" value="<?= (int)$eventId ?>">
@@ -182,7 +189,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $invalidKeys[$key] = true;
         }
 
-        // System-Mapping zuordnen
         switch ($field['system_mapping']) {
             case 'firstname':
                 $coreData['first_name'] = $val;
@@ -199,12 +205,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // Dublettenprüfung pro Veranstaltung (E-Mail)
+    // Dublettenprüfung pro Veranstaltung über den HMAC-SHA256 Blind-Index (email_hash)
     if ($coreData['email'] !== '') {
         $tRegs = Database::table('registrations');
+        $emailHash = Crypto::blindIndex($coreData['email']);
         $existing = Database::fetchOne(
-            "SELECT id FROM {$tRegs} WHERE event_id = :eid AND email = :email LIMIT 1",
-            ['eid' => $eventId, 'email' => $coreData['email']]
+            "SELECT id FROM {$tRegs} WHERE event_id = :eid AND email_hash = :ehash LIMIT 1",
+            ['eid' => $eventId, 'ehash' => $emailHash]
         );
         if ($existing) {
             $errors[] = I18n::t('reg.error_duplicate');
@@ -245,13 +252,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $coreData['email'],
                 Mailer::parseTemplate($tplSubj, $vars),
                 Mailer::parseTemplate($tplBody, $vars),
-                trim((string)$event['admin_email']) ?: null
+                $orgaContactEmail ?: null
             );
         }
 
         $registrationSuccess = true;
     }
 }
+
+$storageNoticeDe = (string)Database::getSetting('storage_notice_de', 'Deine Anmeldedaten werden auf Servern in Deutschland / der EU gespeichert. Kontakt- und Gesundheitsdaten (mit 🔒 markiert) werden zusätzlich mit AES-256-GCM verschlüsselt in der Datenbank abgelegt.');
+$storageNoticeEn = (string)Database::getSetting('storage_notice_en', 'Your registration data is stored on servers in Germany / the EU. Contact and health data (marked with 🔒) are additionally stored encrypted using AES-256-GCM.');
+$storageNotice   = (I18n::isEnglish() && trim($storageNoticeEn) !== '') ? trim($storageNoticeEn) : trim($storageNoticeDe);
 
 ob_start();
 ?>
@@ -261,6 +272,9 @@ ob_start();
         <h3 style="margin-top:0;"><?= e(I18n::t('reg.success_title')) ?></h3>
         <p><?= e(I18n::t('reg.success_text')) ?></p>
     </div>
+    <?php if ($orgaContactEmail !== ''): ?>
+        <p><strong><?= e(I18n::t('reg.contact_prefix')) ?></strong> <a href="mailto:<?= e($orgaContactEmail) ?>"><?= e($orgaContactEmail) ?></a></p>
+    <?php endif; ?>
     <p><a href="index.php" class="btn btn-secondary">&larr; <?= e(I18n::t('nav.home')) ?></a></p>
 <?php else: ?>
     <?php if (!empty($errors)): ?>
@@ -273,6 +287,21 @@ ob_start();
             </ul>
         </div>
     <?php endif; ?>
+
+    <!-- Prominenter Hinweis auf Orga-Kontaktadresse & Datenspeicherstandort -->
+    <div class="doc-box" style="margin-bottom:1.25rem;">
+        <?php if ($orgaContactEmail !== ''): ?>
+            <div style="margin-bottom:<?= $storageNotice !== '' ? '0.5rem' : '0' ?>;">
+                ✉️ <strong><?= e(I18n::t('reg.contact_prefix')) ?></strong>
+                <a href="mailto:<?= e($orgaContactEmail) ?>" style="font-weight:700;"><?= e($orgaContactEmail) ?></a>
+            </div>
+        <?php endif; ?>
+        <?php if ($storageNotice !== ''): ?>
+            <div style="font-size:0.86rem;color:var(--text-muted);">
+                🛡️ <?= nl2br(e($storageNotice)) ?>
+            </div>
+        <?php endif; ?>
+    </div>
 
     <p style="font-size:0.9rem;color:var(--text-muted);margin-top:0;"><?= e(I18n::t('reg.required_hint')) ?></p>
 
@@ -319,7 +348,9 @@ ob_start();
             $lbl  = I18n::field($field, 'label');
             $help = I18n::field($field, 'help');
             $req  = (int)$field['is_required'] === 1;
-            $sens = (int)$field['is_sensitive'] === 1;
+            $sens = (int)($field['is_sensitive'] ?? 0) === 1;
+            $enc  = $sens || ((int)($field['is_encrypted'] ?? 0) === 1);
+            $lockTooltip = $sens ? I18n::t('reg.sensitive_hint') : I18n::t('reg.encrypted_hint');
             $val  = (string)($submittedVals[$key] ?? '');
             $invClass = isset($invalidKeys[$key]) ? 'is-invalid' : '';
 
@@ -336,7 +367,7 @@ ob_start();
                     <label class="form-label" for="f_<?= e($key) ?>">
                         <?= e($lbl) ?>
                         <?php if ($req): ?><span class="req-star">*</span><?php endif; ?>
-                        <?php if ($sens): ?><span class="sensitive-tag" title="<?= e(I18n::t('reg.sensitive_hint')) ?>">🔒 DSGVO</span><?php endif; ?>
+                        <?php if ($enc): ?><span style="cursor:help;font-size:0.9rem;margin-left:0.25rem;opacity:0.8;" title="<?= e($lockTooltip) ?>">🔒</span><?php endif; ?>
                     </label>
                 <?php endif; ?>
 
@@ -383,7 +414,7 @@ ob_start();
                         <label for="f_<?= e($key) ?>" style="font-weight:600;cursor:pointer;">
                             <?= e($lbl) ?>
                             <?php if ($req): ?><span class="req-star">*</span><?php endif; ?>
-                            <?php if ($sens): ?><span class="sensitive-tag" title="<?= e(I18n::t('reg.sensitive_hint')) ?>">🔒 DSGVO</span><?php endif; ?>
+                            <?php if ($enc): ?><span style="cursor:help;font-size:0.9rem;margin-left:0.25rem;opacity:0.8;" title="<?= e($lockTooltip) ?>">🔒</span><?php endif; ?>
                         </label>
                     </div>
 

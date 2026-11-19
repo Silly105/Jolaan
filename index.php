@@ -133,12 +133,6 @@ $renderEventCard = function (array $ev): void {
                     💬 <?= e(I18n::t('index.to_forum')) ?>
                 </a>
             <?php endif; ?>
-
-            <?php if (Auth::isOrga()): ?>
-                <a href="admin.php?module=registrations&event_id=<?= (int)$ev['id'] ?>" class="btn btn-secondary">
-                    ⚙️ Orga: Anmeldungen
-                </a>
-            <?php endif; ?>
         </div>
     </div>
     <?php

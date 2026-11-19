@@ -51,10 +51,10 @@ $langUrlEn = '?' . http_build_query($currentParams);
                 <ul class="nav-links">
                     <li><a href="index.php"><?= e(I18n::t('nav.home')) ?></a></li>
                     <?php if ($mainSiteUrl !== ''): ?>
-                        <li><a href="<?= e($mainSiteUrl) ?>"><?= e(I18n::t('nav.main_site')) ?></a></li>
+                        <li><a href="<?= e($mainSiteUrl) ?>"><?= e($mainSiteLabel ?? I18n::t('nav.main_site')) ?></a></li>
                     <?php endif; ?>
                     <?php if ($forumUrl !== ''): ?>
-                        <li><a href="<?= e($forumUrl) ?>"><?= e(I18n::t('nav.forum')) ?></a></li>
+                        <li><a href="<?= e($forumUrl) ?>"><?= e($forumLabel ?? I18n::t('nav.forum')) ?></a></li>
                     <?php endif; ?>
                 </ul>
                 <div class="nav-orga">

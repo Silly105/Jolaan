@@ -113,14 +113,18 @@ class RegistrationAdminController
                 }
 
                 if ($regId > 0) {
+                    $encCoreEmail  = $coreData['email'] !== '' ? \App\Core\Crypto::encrypt($coreData['email']) : '';
+                    $coreEmailHash = $coreData['email'] !== '' ? \App\Core\Crypto::blindIndex($coreData['email']) : '';
+
                     Database::query(
                         "UPDATE {$tRegs} SET
-                         group_id = :gid, email = :email, first_name = :fname, last_name = :lname, birth_date = :bdate,
+                         group_id = :gid, email = :email, email_hash = :ehash, first_name = :fname, last_name = :lname, birth_date = :bdate,
                          is_confirmed = :conf, is_orga_confirmed = :oconf, amount_paid = :paid, is_fully_paid = :fullpaid, language = :lang
                          WHERE id = :id AND event_id = :eid",
                         [
                             'gid'      => $groupId,
-                            'email'    => $coreData['email'],
+                            'email'    => $encCoreEmail,
+                            'ehash'    => $coreEmailHash,
                             'fname'    => $coreData['first_name'],
                             'lname'    => $coreData['last_name'],
                             'bdate'    => $coreData['birth_date'],

@@ -9,7 +9,8 @@ use App\Core\Database;
 class RegistrationRepository
 {
     /**
-     * Speichert eine neue Anmeldung inklusive aller dynamischen Feldwerte (sensible Felder werden AES-256-GCM verschlüsselt).
+     * Speichert eine neue Anmeldung inklusive aller dynamischen Feldwerte.
+     * Die E-Mail-Adresse im Stammsatz wird AES-256-GCM verschlüsselt und mit einem HMAC-SHA256 Blind-Index (email_hash) versehen.
      */
     public static function create(
         int $eventId,
@@ -19,16 +20,20 @@ class RegistrationRepository
         array $submittedValues
     ): int {
         $tRegs = Database::table('registrations');
-        $tVals = Database::table('registration_values');
+
+        $plainEmail = trim((string)($coreData['email'] ?? ''));
+        $encEmail   = $plainEmail !== '' ? Crypto::encrypt($plainEmail) : '';
+        $emailHash  = $plainEmail !== '' ? Crypto::blindIndex($plainEmail) : '';
 
         Database::query(
             "INSERT INTO {$tRegs}
-             (event_id, group_id, email, first_name, last_name, birth_date, doi_token, is_confirmed, is_orga_confirmed, amount_paid, is_fully_paid, language)
-             VALUES (:eid, :gid, :email, :fname, :lname, :bdate, :token, :conf, :oconf, :paid, :fullpaid, :lang)",
+             (event_id, group_id, email, email_hash, first_name, last_name, birth_date, doi_token, is_confirmed, is_orga_confirmed, amount_paid, is_fully_paid, language)
+             VALUES (:eid, :gid, :email, :ehash, :fname, :lname, :bdate, :token, :conf, :oconf, :paid, :fullpaid, :lang)",
             [
                 'eid'      => $eventId,
                 'gid'      => $groupId,
-                'email'    => $coreData['email'],
+                'email'    => $encEmail,
+                'ehash'    => $emailHash,
                 'fname'    => $coreData['first_name'],
                 'lname'    => $coreData['last_name'],
                 'bdate'    => $coreData['birth_date'] ?: null,
@@ -49,6 +54,7 @@ class RegistrationRepository
 
     /**
      * Aktualisiert die dynamischen Feldwerte einer bestehenden Anmeldung.
+     * Felder mit is_encrypted = 1 oder is_sensitive = 1 werden AES-256-GCM verschlüsselt.
      */
     public static function saveFieldValues(int $registrationId, array $fields, array $submittedValues): void
     {
@@ -64,9 +70,9 @@ class RegistrationRepository
                 continue;
             }
             $rawVal = (string)($submittedValues[$key] ?? $submittedValues[$fieldId] ?? '');
-            $isSensitive = (int)$field['is_sensitive'] === 1;
+            $shouldEncrypt = ((int)($field['is_encrypted'] ?? 0) === 1) || ((int)($field['is_sensitive'] ?? 0) === 1);
 
-            if ($isSensitive && $rawVal !== '') {
+            if ($shouldEncrypt && $rawVal !== '') {
                 $storedVal = Crypto::encrypt($rawVal);
                 $encFlag = 1;
             } else {
@@ -89,7 +95,7 @@ class RegistrationRepository
     }
 
     /**
-     * Lädt eine einzelne Anmeldung inkl. entschlüsselter Feldwerte.
+     * Lädt eine einzelne Anmeldung inkl. entschlüsselter E-Mail und Feldwerte.
      */
     public static function findWithValues(int $registrationId): ?array
     {
@@ -109,6 +115,8 @@ class RegistrationRepository
         if (!$reg) {
             return null;
         }
+
+        $reg['email'] = Crypto::decrypt((string)$reg['email']);
 
         $rows = Database::fetchAll(
             "SELECT rv.field_id, rv.field_value, rv.is_encrypted, f.field_key, f.is_sensitive
@@ -135,7 +143,7 @@ class RegistrationRepository
     }
 
     /**
-     * Lädt alle Anmeldungen einer Veranstaltung inkl. entschlüsselter Feldwerte und berechnetem Alter zum Veranstaltungsbeginn.
+     * Lädt alle Anmeldungen einer Veranstaltung inkl. entschlüsselter E-Mail, Feldwerte und Alter zum Veranstaltungsbeginn.
      */
     public static function allForEvent(int $eventId, ?string $eventStartDate = null): array
     {
@@ -177,6 +185,7 @@ class RegistrationRepository
 
         foreach ($regs as &$r) {
             $rid = (int)$r['id'];
+            $r['email'] = Crypto::decrypt((string)$r['email']);
             $r['values'] = $groupedVals[$rid] ?? [];
             $r['age_at_event'] = calculate_age_at($r['birth_date'] ?? null, $eventStartDate);
             $r['is_under18'] = ($r['age_at_event'] !== null && $r['age_at_event'] < 18);

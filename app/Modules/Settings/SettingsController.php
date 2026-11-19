@@ -4,8 +4,11 @@ declare(strict_types=1);
 namespace App\Modules\Settings;
 
 use App\Core\Auth;
+use App\Core\Config;
+use App\Core\Crypto;
 use App\Core\Database;
 use App\Core\Theme;
+use App\Core\Totp;
 use App\Core\Updater;
 use App\Core\UploadValidator;
 use App\Core\Version;
@@ -22,11 +25,55 @@ class SettingsController
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             Auth::requireCsrf();
+            $subAction = (string)($_POST['sub_action'] ?? 'save_general');
+
+            if ($subAction === 'move_secret_key') {
+                // Schlüsseldatei an einen benutzerdefinierten Pfad (z. B. außerhalb des html-root) verschieben
+                $targetPath = trim((string)($_POST['custom_key_path'] ?? ''));
+                $currentPath = Config::keyPath();
+
+                if ($targetPath === '') {
+                    $_SESSION['flash_error'] = 'Bitte gib einen vollständigen Dateipfad für die Schlüsseldatei an.';
+                } elseif (realpath($targetPath) === realpath($currentPath)) {
+                    $_SESSION['flash_success'] = 'Die Schlüsseldatei befindet sich bereits an diesem Speicherort.';
+                } else {
+                    try {
+                        $targetDir = dirname($targetPath);
+                        if (!is_dir($targetDir)) {
+                            @mkdir($targetDir, 0750, true);
+                        }
+                        $keyContent = @file_get_contents($currentPath);
+                        if ($keyContent === false || strlen(trim($keyContent)) < 40) {
+                            throw new \RuntimeException('Aktuelle Schlüsseldatei konnte nicht gelesen werden.');
+                        }
+                        if (@file_put_contents($targetPath, $keyContent, LOCK_EX) === false) {
+                            throw new \RuntimeException('Auf den Zielpfad konnte nicht geschrieben werden (prüfe Schreibrechte oder open_basedir-Einschränkungen des Hosters).');
+                        }
+                        $verifyRead = @file_get_contents($targetPath);
+                        if ($verifyRead !== $keyContent) {
+                            throw new \RuntimeException('Leseprüfung am neuen Speicherort fehlgeschlagen.');
+                        }
+
+                        Config::save(['custom_key_path' => $targetPath]);
+                        if (realpath($targetPath) !== realpath($currentPath) && is_file($currentPath)) {
+                            @unlink($currentPath);
+                        }
+                        $_SESSION['flash_success'] = "Schlüsseldatei wurde erfolgreich nach „{$targetPath}“ verschoben und das alte Original entfernt!";
+                    } catch (\Throwable $e) {
+                        $_SESSION['flash_error'] = 'Schlüsseldatei konnte nicht verschoben werden: ' . $e->getMessage();
+                    }
+                }
+                header('Location: admin.php?module=settings');
+                exit;
+            }
 
             $keys = [
                 'site_title', 'site_subtitle', 'default_theme',
                 'index_intro_de', 'index_intro_en',
-                'main_site_url', 'forum_url', 'privacy_url', 'imprint_url',
+                'storage_notice_de', 'storage_notice_en',
+                'main_site_url', 'main_site_label_de', 'main_site_label_en',
+                'forum_url', 'forum_label_de', 'forum_label_en',
+                'privacy_url', 'imprint_url',
                 'mail_from_address', 'mail_from_name', 'mail_transport',
                 'smtp_host', 'smtp_port', 'smtp_user', 'smtp_encryption',
             ];
@@ -46,9 +93,9 @@ class SettingsController
                 $check = UploadValidator::validateAndStoreImage(
                     $_FILES['site_logo_file'],
                     'site_logo',
-                    2097152, // max. 2 MB
-                    2500,    // max. 2500 px Breite
-                    800,     // max. 800 px Höhe
+                    2097152,
+                    2500,
+                    800,
                     ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg']
                 );
                 if ($check['ok']) {
@@ -65,9 +112,9 @@ class SettingsController
                 $checkFav = UploadValidator::validateAndStoreImage(
                     $_FILES['site_favicon_file'],
                     'favicon',
-                    524288, // max. 512 KB
-                    512,    // max. 512 px Breite
-                    512,    // max. 512 px Höhe
+                    524288,
+                    512,
+                    512,
                     ['ico', 'png', 'svg', 'gif', 'webp']
                 );
                 if ($checkFav['ok']) {
@@ -97,10 +144,15 @@ class SettingsController
         $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
         $currentDomainUrl = $scheme . '://' . ($_SERVER['HTTP_HOST'] ?? 'deine-domain.de');
 
+        $currentKeyPath = Config::keyPath();
+        $docRoot = rtrim((string)($_SERVER['DOCUMENT_ROOT'] ?? dirname(__DIR__, 3)), '/\\');
+        $suggestedOutsidePath = dirname($docRoot) . '/con_secret.key';
+
         ob_start();
         ?>
         <form method="post" action="admin.php?module=settings" enctype="multipart/form-data">
             <?= Auth::csrfField() ?>
+            <input type="hidden" name="sub_action" value="save_general">
 
             <div class="card">
                 <div class="card-header"><h2>🎨 Globales Theme, Favicon & Seiten-Header</h2></div>
@@ -165,12 +217,41 @@ class SettingsController
 
                     <div class="grid-2">
                         <div class="form-group">
-                            <label>Link zur Hauptseite (optional)</label>
+                            <label>Hinweis zum Datenspeicherstandort & Verschlüsselung über der Anmeldung (Deutsch)</label>
+                            <textarea name="storage_notice_de" rows="3"><?= e(Database::getSetting('storage_notice_de', 'Deine Anmeldedaten werden auf Servern in Deutschland / der EU gespeichert. Kontakt- und Gesundheitsdaten (mit 🔒 markiert) werden zusätzlich mit AES-256-GCM verschlüsselt in der Datenbank abgelegt.')) ?></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label>Hinweis zum Datenspeicherstandort & Verschlüsselung über der Anmeldung (Englisch)</label>
+                            <textarea name="storage_notice_en" rows="3"><?= e(Database::getSetting('storage_notice_en', 'Your registration data is stored on servers in Germany / the EU. Contact and health data (marked with 🔒) are additionally stored encrypted using AES-256-GCM.')) ?></textarea>
+                        </div>
+                    </div>
+
+                    <div class="grid-3">
+                        <div class="form-group">
+                            <label>Link zur Hauptseite (URL – optional)</label>
                             <input type="url" name="main_site_url" value="<?= e(Database::getSetting('main_site_url', '')) ?>" placeholder="<?= e($currentDomainUrl) ?>">
                         </div>
                         <div class="form-group">
-                            <label>Link zum Forum (optional)</label>
+                            <label>Linktext für Hauptseite (Deutsch)</label>
+                            <input type="text" name="main_site_label_de" value="<?= e(Database::getSetting('main_site_label_de', 'Hauptseite')) ?>">
+                        </div>
+                        <div class="form-group">
+                            <label>Linktext für Hauptseite (Englisch)</label>
+                            <input type="text" name="main_site_label_en" value="<?= e(Database::getSetting('main_site_label_en', 'Main Website')) ?>">
+                        </div>
+                    </div>
+                    <div class="grid-3">
+                        <div class="form-group">
+                            <label>Link zum Forum (URL – optional)</label>
                             <input type="url" name="forum_url" value="<?= e(Database::getSetting('forum_url', '')) ?>" placeholder="<?= e($currentDomainUrl) ?>/forum">
+                        </div>
+                        <div class="form-group">
+                            <label>Linktext für Forum (Deutsch)</label>
+                            <input type="text" name="forum_label_de" value="<?= e(Database::getSetting('forum_label_de', 'Forum')) ?>">
+                        </div>
+                        <div class="form-group">
+                            <label>Linktext für Forum (Englisch)</label>
+                            <input type="text" name="forum_label_en" value="<?= e(Database::getSetting('forum_label_en', 'Forum')) ?>">
                         </div>
                     </div>
                     <div class="grid-2">
@@ -237,8 +318,40 @@ class SettingsController
                 </div>
             </div>
 
-            <button type="submit" class="btn btn-primary" style="font-size:1rem;padding:0.65rem 1.5rem;">💾 Einstellungen speichern</button>
+            <div style="margin-bottom:1.75rem;">
+                <button type="submit" class="btn btn-primary" style="font-size:1rem;padding:0.65rem 1.5rem;">💾 Einstellungen speichern</button>
+            </div>
         </form>
+
+        <!-- Speicherort der AES-256 Schlüsseldatei (secret.key) anpassen -->
+        <div class="card">
+            <div class="card-header">
+                <h2>🔐 Speicherort der Verschlüsselungs-Schlüsseldatei (<code>secret.key</code>)</h2>
+            </div>
+            <div class="card-body">
+                <p style="margin-top:0;font-size:0.9rem;color:#475569;">
+                    Die Schlüsseldatei wird benötigt, um verschlüsselte Teilnehmerdaten (E-Mail, Telefon, Gesundheitsdaten) zu ver- und entschlüsseln.
+                    Standardmäßig liegt sie durch <code>.htaccess</code> geschützt unter <code>storage/config/secret.key</code>.
+                    Für maximale Sicherheit kannst du sie mit einem Klick in ein Verzeichnis <strong>oberhalb des Webroots (außerhalb von <code>public_html</code>)</strong> verschieben.
+                </p>
+                <div style="background:#f8fafc;padding:0.85rem 1.1rem;border-radius:6px;border:1px solid #cbd5e1;margin-bottom:1rem;font-size:0.88rem;">
+                    <div><strong>Aktueller Speicherort:</strong> <code><?= e($currentKeyPath) ?></code></div>
+                    <div style="margin-top:0.25rem;color:#64748b;"><strong>Vorschlag außerhalb des Webroots:</strong> <code><?= e($suggestedOutsidePath) ?></code></div>
+                </div>
+                <form method="post" action="admin.php?module=settings" onsubmit="return confirm('Schlüsseldatei jetzt an den neuen Serverpfad verschieben?');">
+                    <?= Auth::csrfField() ?>
+                    <input type="hidden" name="sub_action" value="move_secret_key">
+                    <div class="form-group" style="max-width:680px;">
+                        <label for="custom_key_path">Neuer absoluter Serverpfad für die Schlüsseldatei</label>
+                        <div style="display:flex;gap:0.6rem;">
+                            <input type="text" id="custom_key_path" name="custom_key_path" value="<?= e($currentKeyPath) ?>" placeholder="<?= e($suggestedOutsidePath) ?>" required>
+                            <button type="submit" class="btn btn-secondary" style="white-space:nowrap;">📦 Schlüsseldatei verschieben</button>
+                        </div>
+                        <div class="help-text">Das System prüft vor dem Umstellen automatisch, ob der neue Pfad beschreibbar und lesbar ist.</div>
+                    </div>
+                </form>
+            </div>
+        </div>
         <?php
         AdminLayout::render('Globales Design & Systemeinstellungen', 'settings', (string)ob_get_clean());
     }
@@ -346,7 +459,7 @@ class SettingsController
                             "INSERT INTO {$tUsers} (email, password_hash, name, role, is_active) VALUES (:email, :hash, :name, :role, 1)",
                             ['email' => $email, 'hash' => password_hash($pass, PASSWORD_DEFAULT), 'name' => $name, 'role' => $role]
                         );
-                        $_SESSION['flash_success'] = "Benutzer „{$name}“ ({$role}) wurde angelegt.";
+                        $_SESSION['flash_success'] = "Benutzer „{$name}“ (" . Auth::roleLabel($role) . ") wurde angelegt.";
                     } catch (\Throwable) {
                         $_SESSION['flash_error'] = 'Diese E-Mail-Adresse ist bereits vergeben.';
                     }
@@ -357,7 +470,6 @@ class SettingsController
                 $act   = isset($_POST['is_active']) ? 1 : 0;
                 $newPw = trim((string)($_POST['reset_user_password'] ?? ''));
 
-                // Verhindern, dass man sich selbst aussperrt
                 $currentUser = Auth::user();
                 if ($currentUser && $uid === (int)$currentUser['id']) {
                     $role = 'admin';
@@ -375,18 +487,18 @@ class SettingsController
             exit;
         }
 
-        $users = Database::fetchAll("SELECT id, email, name, role, is_active, created_at FROM {$tUsers} ORDER BY role ASC, name ASC");
+        $users = Database::fetchAll("SELECT id, email, name, role, is_active, totp_enabled, created_at FROM {$tUsers} ORDER BY role ASC, name ASC");
         $meId  = (int)(Auth::user()['id'] ?? 0);
 
         ob_start();
         ?>
         <div class="card">
-            <div class="card-header"><h2>🔑 Orga- & Administrator-Konten</h2></div>
+            <div class="card-header"><h2>🔑 SL- & Administrator-Konten</h2></div>
             <div class="card-body table-responsive">
                 <p style="margin-top:0;font-size:0.88rem;color:#475569;">
                     <strong>Rollen-Konzept</strong> –
                     <code>Admin</code> hat Vollzugriff (Cons, Formular-Baukasten, DSGVO, Systemeinstellungen).
-                    <code>Orga / SL</code> kann sich im Backend anmelden, Teilnehmerlisten/Filter/Druckansichten einsehen sowie Zahlungen und Anmeldungen bearbeiten.
+                    <code>SL</code> kann sich im Backend anmelden, Teilnehmerlisten/Filter/Druckansichten einsehen sowie Zahlungen und Anmeldungen bearbeiten.
                 </p>
                 <table class="data-table">
                     <thead>
@@ -394,6 +506,7 @@ class SettingsController
                             <th>Name</th>
                             <th>E-Mail</th>
                             <th>Rolle</th>
+                            <th>2FA-Schutz</th>
                             <th>Aktiv</th>
                             <th>Neues Passwort setzen (optional)</th>
                             <th>Aktionen</th>
@@ -413,8 +526,15 @@ class SettingsController
                                     <td>
                                         <select name="role" <?= $uid === $meId ? 'disabled' : '' ?>>
                                             <option value="admin" <?= $u['role'] === 'admin' ? 'selected' : '' ?>>Administrator</option>
-                                            <option value="orga" <?= $u['role'] === 'orga' ? 'selected' : '' ?>>Orga / SL</option>
+                                            <option value="orga" <?= $u['role'] === 'orga' ? 'selected' : '' ?>>SL</option>
                                         </select>
+                                    </td>
+                                    <td>
+                                        <?php if ((int)($u['totp_enabled'] ?? 0) === 1): ?>
+                                            <span class="badge badge-green" title="Geschützt durch TOTP + persönliche Notfallcodes">🔐 2FA aktiv</span>
+                                        <?php else: ?>
+                                            <span class="badge badge-gray">Aus</span>
+                                        <?php endif; ?>
                                     </td>
                                     <td style="text-align:center;">
                                         <input type="checkbox" name="is_active" value="1" <?= (int)$u['is_active'] === 1 ? 'checked' : '' ?> <?= $uid === $meId ? 'disabled' : '' ?>>
@@ -457,7 +577,7 @@ class SettingsController
                         <div class="form-group">
                             <label for="new_user_role">Rolle*</label>
                             <select id="new_user_role" name="new_user_role">
-                                <option value="orga">Orga / SL (Teilnehmer & Listen verwalten)</option>
+                                <option value="orga">SL (Teilnehmer & Listen verwalten)</option>
                                 <option value="admin">Administrator (Vollzugriff)</option>
                             </select>
                         </div>
@@ -482,59 +602,204 @@ class SettingsController
             exit;
         }
 
+        $tUsers = Database::table('users');
+        $dbUser = Database::fetchOne("SELECT * FROM {$tUsers} WHERE id = :id", ['id' => (int)$user['id']]);
+        if (!$dbUser) {
+            header('Location: admin.php');
+            exit;
+        }
+
+        $freshBackupCodes = $_SESSION['fresh_2fa_backup_codes'] ?? null;
+        unset($_SESSION['fresh_2fa_backup_codes']);
+
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             Auth::requireCsrf();
-            $oldPw  = (string)($_POST['old_password'] ?? '');
-            $newPw1 = (string)($_POST['new_password1'] ?? '');
-            $newPw2 = (string)($_POST['new_password2'] ?? '');
+            $subAction = (string)($_POST['sub_action'] ?? 'change_password');
 
-            $tUsers = Database::table('users');
-            $dbUser = Database::fetchOne("SELECT password_hash FROM {$tUsers} WHERE id = :id", ['id' => (int)$user['id']]);
+            if ($subAction === 'change_password') {
+                $oldPw  = (string)($_POST['old_password'] ?? '');
+                $newPw1 = (string)($_POST['new_password1'] ?? '');
+                $newPw2 = (string)($_POST['new_password2'] ?? '');
 
-            if (!$dbUser || !password_verify($oldPw, (string)$dbUser['password_hash'])) {
-                $_SESSION['flash_error'] = 'Das aktuelle Passwort ist nicht korrekt.';
-            } elseif (strlen($newPw1) < 8 || $newPw1 !== $newPw2) {
-                $_SESSION['flash_error'] = 'Das neue Passwort muss mindestens 8 Zeichen lang sein und mit der Wiederholung übereinstimmen.';
-            } else {
-                Database::query(
-                    "UPDATE {$tUsers} SET password_hash = :hash WHERE id = :id",
-                    ['hash' => password_hash($newPw1, PASSWORD_DEFAULT), 'id' => (int)$user['id']]
-                );
-                $_SESSION['flash_success'] = 'Dein Passwort wurde erfolgreich geändert.';
+                if (!password_verify($oldPw, (string)$dbUser['password_hash'])) {
+                    $_SESSION['flash_error'] = 'Das aktuelle Passwort ist nicht korrekt.';
+                } elseif (strlen($newPw1) < 8 || $newPw1 !== $newPw2) {
+                    $_SESSION['flash_error'] = 'Das neue Passwort muss mindestens 8 Zeichen lang sein und mit der Wiederholung übereinstimmen.';
+                } else {
+                    Database::query(
+                        "UPDATE {$tUsers} SET password_hash = :hash WHERE id = :id",
+                        ['hash' => password_hash($newPw1, PASSWORD_DEFAULT), 'id' => (int)$user['id']]
+                    );
+                    $_SESSION['flash_success'] = 'Dein Passwort wurde erfolgreich geändert.';
+                }
+            } elseif ($subAction === 'enable_2fa') {
+                $setupSecret = (string)($_SESSION['setup_2fa_secret'] ?? '');
+                $verifyCode  = trim((string)($_POST['totp_verify_code'] ?? ''));
+
+                if ($setupSecret === '' || !Totp::verifyCode($setupSecret, $verifyCode)) {
+                    $_SESSION['flash_error'] = 'Der eingegebene 6-stellige Code stimmt nicht überein. Bitte prüfe die Uhrzeit deines Geräts und versuche es erneut.';
+                } else {
+                    $backups = Totp::generateBackupCodes(8);
+                    Database::query(
+                        "UPDATE {$tUsers} SET totp_secret = :sec, totp_enabled = 1, totp_backup_codes = :bc WHERE id = :id",
+                        [
+                            'sec' => Crypto::encrypt($setupSecret),
+                            'bc'  => $backups['hashes_json'],
+                            'id'  => (int)$user['id'],
+                        ]
+                    );
+                    unset($_SESSION['setup_2fa_secret']);
+                    $_SESSION['fresh_2fa_backup_codes'] = $backups['plain'];
+                    $_SESSION['flash_success'] = 'Zwei-Faktor-Authentifizierung (2FA) wurde erfolgreich aktiviert! Bitte sichere jetzt deine 8 Einmal-Notfallcodes.';
+                }
+            } elseif ($subAction === 'disable_2fa') {
+                // Deaktivieren erfordert zwingend einen gültigen aktuellen 2FA-Code oder einen gültigen Backup-Code
+                $confirmCode = trim((string)($_POST['disable_2fa_code'] ?? ''));
+                $secretEnc   = (string)($dbUser['totp_secret'] ?? '');
+                $secret      = Crypto::isEncrypted($secretEnc) ? Crypto::decrypt($secretEnc) : $secretEnc;
+
+                $codeValid = Totp::verifyCode($secret, $confirmCode)
+                    || (Totp::verifyAndConsumeBackupCode($confirmCode, $dbUser['totp_backup_codes'] ?? null) !== null);
+
+                if (!$codeValid) {
+                    $_SESSION['flash_error'] = 'Ungültiger 2FA- oder Notfallcode. Ohne gültigen zweiten Faktor kann 2FA nicht deaktiviert werden.';
+                } else {
+                    Database::query(
+                        "UPDATE {$tUsers} SET totp_enabled = 0, totp_secret = NULL, totp_backup_codes = NULL WHERE id = :id",
+                        ['id' => (int)$user['id']]
+                    );
+                    $_SESSION['flash_success'] = 'Die Zwei-Faktor-Authentifizierung wurde für deinen Account deaktiviert.';
+                }
             }
+
             header('Location: admin.php?module=profile');
             exit;
         }
 
+        $is2faEnabled = (int)($dbUser['totp_enabled'] ?? 0) === 1;
+        $setupSecret = '';
+        $otpUri      = '';
+        if (!$is2faEnabled) {
+            if (empty($_SESSION['setup_2fa_secret'])) {
+                $_SESSION['setup_2fa_secret'] = Totp::generateSecret(32);
+            }
+            $setupSecret = (string)$_SESSION['setup_2fa_secret'];
+            $siteTitle   = (string)Database::getSetting('site_title', 'ConManagement');
+            $otpUri      = Totp::getProvisioningUri($setupSecret, (string)$user['email'], $siteTitle);
+        }
+
+        $remainingBackups = 0;
+        if ($is2faEnabled && !empty($dbUser['totp_backup_codes'])) {
+            $arr = json_decode((string)$dbUser['totp_backup_codes'], true);
+            $remainingBackups = is_array($arr) ? count($arr) : 0;
+        }
+
         ob_start();
         ?>
-        <div class="card" style="max-width:520px;">
-            <div class="card-header"><h2>🔒 Eigenes Passwort ändern</h2></div>
-            <div class="card-body">
-                <form method="post" action="admin.php?module=profile">
-                    <?= Auth::csrfField() ?>
-                    <div class="form-group">
-                        <label>Aktuelles Passwort</label>
-                        <input type="password" name="old_password" autocomplete="current-password" required>
+        <?php if (is_array($freshBackupCodes) && !empty($freshBackupCodes)): ?>
+            <div class="card" style="border:2px solid #16a34a;background:#f0fdf4;">
+                <div class="card-header" style="background:#dcfce7;">
+                    <h2 style="color:#166534;">🚨 WICHTIG – Deine 8 persönlichen Einmal-Notfallcodes (Backup-Codes)</h2>
+                </div>
+                <div class="card-body">
+                    <p style="margin-top:0;color:#166534;">
+                        Diese Codes werden <strong>nur ein einziges Mal jetzt angezeigt</strong> und sind in der Datenbank nur verschlüsselt als Hash hinterlegt.
+                        Drucke sie aus oder speichere sie in deinem Passwort-Manager! Falls du dein Smartphone verlierst, kannst du dich mit jedem dieser Codes anmelden oder 2FA zurücksetzen.
+                    </p>
+                    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.65rem;background:#ffffff;padding:1rem;border-radius:6px;border:1px solid #86efac;font-family:monospace;font-size:1.1rem;font-weight:700;text-align:center;">
+                        <?php foreach ($freshBackupCodes as $bc): ?>
+                            <div style="padding:0.35rem;background:#f8fafc;border-radius:4px;border:1px solid #e2e8f0;"><?= e($bc) ?></div>
+                        <?php endforeach; ?>
                     </div>
-                    <div class="form-group">
-                        <label>Neues Passwort (mindestens 8 Zeichen)</label>
-                        <input type="password" name="new_password1" minlength="8" autocomplete="new-password" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Neues Passwort wiederholen</label>
-                        <input type="password" name="new_password2" minlength="8" autocomplete="new-password" required>
-                    </div>
-                    <button type="submit" class="btn btn-primary">💾 Passwort ändern</button>
-                </form>
+                </div>
+            </div>
+        <?php endif; ?>
+
+        <div class="grid-2">
+            <!-- Passwort ändern -->
+            <div class="card">
+                <div class="card-header"><h2>🔒 Eigenes Passwort ändern</h2></div>
+                <div class="card-body">
+                    <form method="post" action="admin.php?module=profile">
+                        <?= Auth::csrfField() ?>
+                        <input type="hidden" name="sub_action" value="change_password">
+                        <div class="form-group">
+                            <label>Aktuelles Passwort</label>
+                            <input type="password" name="old_password" autocomplete="current-password" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Neues Passwort (mindestens 8 Zeichen)</label>
+                            <input type="password" name="new_password1" minlength="8" autocomplete="new-password" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Neues Passwort wiederholen</label>
+                            <input type="password" name="new_password2" minlength="8" autocomplete="new-password" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">💾 Passwort ändern</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Zwei-Faktor-Authentifizierung (TOTP) -->
+            <div class="card">
+                <div class="card-header">
+                    <h2>🔐 Zwei-Faktor-Authentifizierung (2FA / TOTP)</h2>
+                    <?php if ($is2faEnabled): ?>
+                        <span class="badge badge-green">Aktiviert</span>
+                    <?php else: ?>
+                        <span class="badge badge-gray">Inaktiv</span>
+                    <?php endif; ?>
+                </div>
+                <div class="card-body">
+                    <?php if ($is2faEnabled): ?>
+                        <p style="margin-top:0;color:#166534;font-weight:600;">
+                            ✅ Dein Account ist durch Zwei-Faktor-Authentifizierung geschützt.
+                        </p>
+                        <p style="font-size:0.88rem;color:#475569;">
+                            Verbleibende Einmal-Notfallcodes: <strong><?= $remainingBackups ?> von 8</strong>.<br>
+                            Aus Sicherheitsgründen kann 2FA im Web-Backend nur nach Eingabe eines gültigen 6-stelligen App-Codes oder eines Einmal-Notfallcodes deaktiviert werden.
+                        </p>
+                        <form method="post" action="admin.php?module=profile" onsubmit="return confirm('2FA wirklich deaktivieren?');" style="margin-top:1.25rem;padding-top:1rem;border-top:1px solid #e2e8f0;">
+                            <?= Auth::csrfField() ?>
+                            <input type="hidden" name="sub_action" value="disable_2fa">
+                            <div class="form-group">
+                                <label for="disable_2fa_code">Aktueller 6-stelliger 2FA-Code (oder Einmal-Notfallcode) zur Bestätigung</label>
+                                <input type="text" id="disable_2fa_code" name="disable_2fa_code" placeholder="123456 oder XXXX-XXXX" autocomplete="one-time-code" required>
+                            </div>
+                            <button type="submit" class="btn btn-danger btn-sm">🔓 2FA deaktivieren</button>
+                        </form>
+                    <?php else: ?>
+                        <p style="margin-top:0;font-size:0.88rem;color:#475569;">
+                            Schütze deinen Account mit einer Authenticator-App (z. B. <em>Google Authenticator, Aegis, Bitwarden, 1Password, Apple Passwörter</em>). Es werden <strong>keine externen Dienste</strong> eingebunden.
+                        </p>
+                        <div class="form-group">
+                            <label for="totp_secret_input">1. Einrichtungsschlüssel (Base32) in deiner Authenticator-App eintragen</label>
+                            <div class="copy-input-wrap">
+                                <input type="text" id="totp_secret_input" readonly value="<?= e($setupSecret) ?>" onclick="this.select()" style="font-family:monospace;font-weight:700;">
+                                <button type="button" class="copy-icon-btn" onclick="copyInputToClipboard('totp_secret_input', this)" title="Schlüssel kopieren">📋</button>
+                            </div>
+                            <div class="help-text">Typ: Zeitbasiert (TOTP, 6 Ziffern, 30 Sek.) &middot; <a href="<?= e($otpUri) ?>">Direktlink für Passwort-Manager (otpauth://)</a></div>
+                        </div>
+
+                        <form method="post" action="admin.php?module=profile">
+                            <?= Auth::csrfField() ?>
+                            <input type="hidden" name="sub_action" value="enable_2fa">
+                            <div class="form-group">
+                                <label for="totp_verify_code">2. Angezeigten 6-stelligen Code aus der App zur Bestätigung eingeben</label>
+                                <input type="text" id="totp_verify_code" name="totp_verify_code" placeholder="123456" pattern="\d{6}" maxlength="6" autocomplete="one-time-code" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary">🔐 2FA jetzt aktivieren & Notfallcodes erzeugen</button>
+                        </form>
+                    <?php endif; ?>
+                </div>
             </div>
         </div>
         <?php
-        AdminLayout::render('Mein Profil & Passwort', 'profile', (string)ob_get_clean());
+        AdminLayout::render('Mein Profil, Passwort & 2FA', 'profile', (string)ob_get_clean());
     }
 
     /**
-     * System-Update & Changelog Modul: Zeigt installierte DB-Version, Code-Version und die komplette Änderungshistorie
+     * System-Update & Changelog Modul
      */
     public static function handleUpdater(): void
     {

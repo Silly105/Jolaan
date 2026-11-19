@@ -6,7 +6,8 @@ namespace App\Core;
 use RuntimeException;
 
 /**
- * DSGVO-konforme AES-256-GCM Verschlüsselung für als "Sensible Daten" markierte Formularfelder.
+ * DSGVO-konforme AES-256-GCM Verschlüsselung für verschlüsselte und sensible Formularfelder
+ * sowie HMAC-SHA256 Blind-Index für die Suche nach verschlüsselten E-Mail-Adressen.
  */
 class Crypto
 {
@@ -17,7 +18,7 @@ class Crypto
     {
         $keyPath = Config::keyPath();
         if (!is_file($keyPath)) {
-            throw new RuntimeException('Verschlüsselungsschlüssel (secret.key) nicht gefunden.');
+            throw new RuntimeException('Verschlüsselungsschlüssel (secret.key) nicht gefunden unter: ' . $keyPath);
         }
         $raw = trim((string)file_get_contents($keyPath));
         $key = base64_decode($raw, true);
@@ -27,22 +28,23 @@ class Crypto
         return $key;
     }
 
-    public static function generateKeyFile(): string
+    public static function generateKeyFile(?string $targetPath = null): string
     {
         $key = random_bytes(32);
         $encoded = base64_encode($key);
-        $dir = dirname(Config::keyPath());
+        $path = $targetPath ?: Config::defaultKeyPath();
+        $dir = dirname($path);
         if (!is_dir($dir)) {
             mkdir($dir, 0755, true);
         }
-        file_put_contents(Config::keyPath(), $encoded, LOCK_EX);
+        file_put_contents($path, $encoded, LOCK_EX);
         return $encoded;
     }
 
     public static function encrypt(string $plaintext): string
     {
-        if ($plaintext === '') {
-            return '';
+        if ($plaintext === '' || self::isEncrypted($plaintext)) {
+            return $plaintext;
         }
         $key = self::getKey();
         $ivLen = openssl_cipher_iv_length(self::CIPHER);
@@ -77,5 +79,19 @@ class Crypto
     public static function isEncrypted(string $value): bool
     {
         return str_starts_with($value, self::PREFIX);
+    }
+
+    /**
+     * Erzeugt einen deterministischen HMAC-SHA256 Such-Hash (Blind Index) für eine E-Mail-Adresse,
+     * damit E-Mails in der Datenbank AES-256-GCM verschlüsselt gespeichert werden können und trotzdem
+     * auf Dubletten geprüft werden können.
+     */
+    public static function blindIndex(string $value): string
+    {
+        $normalized = mb_strtolower(trim($value), 'UTF-8');
+        if ($normalized === '') {
+            return '';
+        }
+        return hash_hmac('sha256', $normalized, self::getKey());
     }
 }

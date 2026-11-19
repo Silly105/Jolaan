@@ -113,6 +113,20 @@ class Theme
         $globalLogo = (string)Database::getSetting('site_logo', '');
         $faviconUrl = (string)Database::getSetting('site_favicon', '');
 
+        $isEn = I18n::isEnglish();
+        $mainSiteLabel = $isEn
+            ? (string)Database::getSetting('main_site_label_en', I18n::t('nav.main_site'))
+            : (string)Database::getSetting('main_site_label_de', I18n::t('nav.main_site'));
+        if (trim($mainSiteLabel) === '') {
+            $mainSiteLabel = I18n::t('nav.main_site');
+        }
+        $forumLabel = $isEn
+            ? (string)Database::getSetting('forum_label_en', I18n::t('nav.forum'))
+            : (string)Database::getSetting('forum_label_de', I18n::t('nav.forum'));
+        if (trim($forumLabel) === '') {
+            $forumLabel = I18n::t('nav.forum');
+        }
+
         // Pro Veranstaltung konfigurierbarer Header (Logo & Textblock über der Anmeldung)
         $headerLogo = '';
         $headerText = '';

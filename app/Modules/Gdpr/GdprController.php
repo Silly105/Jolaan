@@ -51,11 +51,12 @@ class GdprController
                 // Komplette Löschung (Recht auf Vergessenwerden Art. 17 DSGVO) für eine E-Mail-Adresse
                 $targetEmail = trim((string)($_POST['target_email'] ?? ''));
                 if ($targetEmail !== '' && trim((string)($_POST['confirm_word'] ?? '')) === 'LÖSCHEN') {
+                    $targetHash = Crypto::blindIndex($targetEmail);
                     Database::query(
-                        "DELETE rv FROM {$tVals} rv INNER JOIN {$tRegs} r ON r.id = rv.registration_id WHERE r.email = :email",
-                        ['email' => $targetEmail]
+                        "DELETE rv FROM {$tVals} rv INNER JOIN {$tRegs} r ON r.id = rv.registration_id WHERE r.email_hash = :ehash OR r.email = :email",
+                        ['ehash' => $targetHash, 'email' => $targetEmail]
                     );
-                    $stmt = Database::query("DELETE FROM {$tRegs} WHERE email = :email", ['email' => $targetEmail]);
+                    $stmt = Database::query("DELETE FROM {$tRegs} WHERE email_hash = :ehash OR email = :email", ['ehash' => $targetHash, 'email' => $targetEmail]);
                     $count = $stmt->rowCount();
                     $_SESSION['flash_success'] = "DSGVO-Löschung durchgeführt: Alle {$count} Anmeldungen zu „{$targetEmail}“ wurden vollständig gelöscht.";
                 } else {
@@ -69,15 +70,27 @@ class GdprController
         // DSGVO-Datenauskunft (Art. 15) suchen & ggf. als JSON oder Druckbericht exportieren
         $foundRecords = [];
         if ($searchQuery !== '') {
-            $regs = Database::fetchAll(
+            $emailHash = Crypto::blindIndex($searchQuery);
+            $allCandidates = Database::fetchAll(
                 "SELECT r.*, e.title AS event_title, e.start_date, e.end_date, g.name_de AS group_name
                  FROM {$tRegs} r
                  LEFT JOIN {$tEvents} e ON e.id = r.event_id
                  LEFT JOIN {$tGroups} g ON g.id = r.group_id
-                 WHERE r.email LIKE :q1 OR CONCAT(r.first_name, ' ', r.last_name) LIKE :q2
-                 ORDER BY r.created_at DESC",
-                ['q1' => '%' . $searchQuery . '%', 'q2' => '%' . $searchQuery . '%']
+                 ORDER BY r.created_at DESC"
             );
+
+            $regs = [];
+            foreach ($allCandidates as $cand) {
+                $cand['email'] = Crypto::decrypt((string)$cand['email']);
+                $fullName = $cand['first_name'] . ' ' . $cand['last_name'];
+                if (
+                    ($emailHash !== '' && ($cand['email_hash'] ?? '') === $emailHash) ||
+                    mb_stripos($cand['email'], $searchQuery) !== false ||
+                    mb_stripos($fullName, $searchQuery) !== false
+                ) {
+                    $regs[] = $cand;
+                }
+            }
 
             foreach ($regs as $r) {
                 $rid = (int)$r['id'];

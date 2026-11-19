@@ -11,6 +11,9 @@ storage/config/secret.key
 storage/uploads/*
 !storage/uploads/.gitkeep
 
+# Temporäres Testdaten-Skript
+seed_testdata.php
+
 # Betriebssystem-Dateien
 Thumbs.db
 .DS_Store

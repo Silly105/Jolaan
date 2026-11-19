@@ -59,12 +59,6 @@ class EventAdminController
                                         <?php if ($ev['subtitle'] !== ''): ?>
                                             <div style="font-size:0.82rem;color:#64748b;"><?= e($ev['subtitle']) ?></div>
                                         <?php endif; ?>
-                                        <?php if ($ev['theme']): ?>
-                                            <span class="badge badge-blue">Theme: <?= e($ev['theme']) ?></span>
-                                        <?php endif; ?>
-                                        <?php if ((int)$ev['is_bilingual'] === 1): ?>
-                                            <span class="badge badge-amber">DE / EN</span>
-                                        <?php endif; ?>
                                     </td>
                                     <td style="white-space:nowrap;">
                                         <?= e(format_date($ev['start_date'])) ?> – <?= e(format_date($ev['end_date'])) ?>

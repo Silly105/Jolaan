@@ -10,7 +10,7 @@ use App\Core\Version;
 
 class AdminLayout
 {
-    public static function renderLogin(string $error = ''): void
+    public static function renderLogin(string $error = '', bool $show2faStep = false): void
     {
         $siteTitle  = (string)Database::getSetting('site_title', 'Con-Management');
         $faviconUrl = (string)Database::getSetting('site_favicon', '');
@@ -106,19 +106,32 @@ class AdminLayout
                     <?php if ($error !== ''): ?>
                         <div class="err"><?= e($error) ?></div>
                     <?php endif; ?>
-                    <form method="post" action="admin.php?action=login">
-                        <?= Auth::csrfField() ?>
-                        <div class="form-group">
-                            <label for="email">E-Mail-Adresse</label>
-                            <input type="email" id="email" name="email" autocomplete="username" required autofocus>
-                        </div>
-                        <div class="form-group">
-                            <label for="password">Passwort</label>
-                            <input type="password" id="password" name="password" autocomplete="current-password" required>
-                        </div>
-                        <button type="submit" class="btn">Anmelden</button>
-                    </form>
-                    <a href="index.php" class="back-link">&larr; Zurück zur öffentlichen Startseite</a>
+
+                    <?php if ($show2faStep): ?>
+                        <form method="post" action="admin.php?action=verify_2fa">
+                            <?= Auth::csrfField() ?>
+                            <div class="form-group">
+                                <label for="totp_code">🔐 Zwei-Faktor-Code (6 Ziffern) oder Einmal-Notfallcode</label>
+                                <input type="text" id="totp_code" name="totp_code" placeholder="123456 oder XXXX-XXXX" autocomplete="one-time-code" required autofocus style="font-size:1.15rem;letter-spacing:0.12em;text-align:center;">
+                            </div>
+                            <button type="submit" class="btn">Code bestätigen & Anmelden</button>
+                        </form>
+                        <a href="admin.php?action=logout" class="back-link">&larr; Anmeldung abbrechen</a>
+                    <?php else: ?>
+                        <form method="post" action="admin.php?action=login">
+                            <?= Auth::csrfField() ?>
+                            <div class="form-group">
+                                <label for="email">E-Mail-Adresse</label>
+                                <input type="email" id="email" name="email" autocomplete="username" required autofocus>
+                            </div>
+                            <div class="form-group">
+                                <label for="password">Passwort</label>
+                                <input type="password" id="password" name="password" autocomplete="current-password" required>
+                            </div>
+                            <button type="submit" class="btn">Anmelden</button>
+                        </form>
+                        <a href="index.php" class="back-link">&larr; Zurück zur öffentlichen Startseite</a>
+                    <?php endif; ?>
                 </div>
             </div>
         </body>
@@ -184,7 +197,7 @@ class AdminLayout
                 }
                 .sidebar-brand a.brand-title { color: #ffffff; text-decoration: none; font-weight: 700; font-size: 1.15rem; display: block; }
                 .sidebar-brand span.brand-sub { font-size: 0.78rem; color: #cbd5e1; display: block; margin-top: 0.15rem; }
-                .sidebar-brand a.version-pill {
+                .sidebar-brand .version-pill {
                     display: inline-block;
                     margin-top: 0.45rem;
                     padding: 0.12rem 0.55rem;
@@ -411,9 +424,13 @@ class AdminLayout
                 <div class="sidebar-brand">
                     <a href="admin.php" class="brand-title"><?= e($siteTitle) ?></a>
                     <span class="brand-sub">Orga- & Admin-Backend</span>
-                    <a href="admin.php?module=updater" class="version-pill" title="System-Version & Änderungshistorie anzeigen">
-                        Version <?= e(Version::CURRENT) ?>
-                    </a>
+                    <?php if ($isAdmin): ?>
+                        <a href="admin.php?module=updater" class="version-pill" title="System-Version & Änderungshistorie anzeigen">
+                            Version <?= e(Version::CURRENT) ?>
+                        </a>
+                    <?php else: ?>
+                        <span class="version-pill">Version <?= e(Version::CURRENT) ?></span>
+                    <?php endif; ?>
                 </div>
 
                 <div class="nav-section">Veranstaltungen & Orga</div>
@@ -431,6 +448,7 @@ class AdminLayout
                     <?php else: ?>
                         <li><a href="admin.php?module=lists" class="<?= $activeModule === 'lists' ? 'active' : '' ?>">📋 Listen, Filter & Export</a></li>
                     <?php endif; ?>
+                    <li><a href="admin.php?module=help" class="<?= $activeModule === 'help' ? 'active' : '' ?>">❓ Hilfe & Handbuch</a></li>
                 </ul>
 
                 <?php if ($isAdmin): ?>
@@ -452,9 +470,9 @@ class AdminLayout
                 </ul>
 
                 <div class="sidebar-footer">
-                    <div>Angemeldet als <strong><?= e($user['name'] ?? '') ?></strong> (<?= e(strtoupper($user['role'] ?? '')) ?>)</div>
+                    <div>Angemeldet als <strong><?= e($user['name'] ?? '') ?></strong> (<?= e(Auth::roleLabel($user['role'] ?? 'orga')) ?>)</div>
                     <div style="margin-top:0.35rem;">
-                        <a href="admin.php?module=profile" style="color:#93c5fd;margin-right:0.75rem;">Passwort ändern</a>
+                        <a href="admin.php?module=profile" style="color:#93c5fd;margin-right:0.75rem;">Passwort & 2FA</a>
                         <a href="admin.php?action=logout">Abmelden</a>
                     </div>
                 </div>

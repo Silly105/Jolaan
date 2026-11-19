@@ -104,6 +104,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $allChecksOk) {
                     `name` VARCHAR(150) NOT NULL,
                     `role` ENUM('admin', 'orga') NOT NULL DEFAULT 'orga',
                     `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+                    `totp_secret` VARCHAR(120) NULL DEFAULT NULL,
+                    `totp_enabled` TINYINT(1) NOT NULL DEFAULT 0,
+                    `totp_backup_codes` TEXT NULL DEFAULT NULL,
                     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
 
@@ -157,6 +160,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $allChecksOk) {
                     `help_en` TEXT NULL,
                     `options_json` TEXT NULL,
                     `is_required` TINYINT(1) NOT NULL DEFAULT 0,
+                    `is_encrypted` TINYINT(1) NOT NULL DEFAULT 0,
                     `is_sensitive` TINYINT(1) NOT NULL DEFAULT 0,
                     `is_orga_only` TINYINT(1) NOT NULL DEFAULT 0,
                     `system_mapping` VARCHAR(40) NOT NULL DEFAULT 'none',
@@ -168,7 +172,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $allChecksOk) {
                     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
                     `event_id` INT UNSIGNED NOT NULL,
                     `group_id` INT UNSIGNED NOT NULL,
-                    `email` VARCHAR(190) NOT NULL,
+                    `email` TEXT NOT NULL,
+                    `email_hash` VARCHAR(64) NOT NULL DEFAULT '',
                     `first_name` VARCHAR(120) NOT NULL DEFAULT '',
                     `last_name` VARCHAR(120) NOT NULL DEFAULT '',
                     `birth_date` DATE NULL DEFAULT NULL,
@@ -180,7 +185,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $allChecksOk) {
                     `language` VARCHAR(5) NOT NULL DEFAULT 'de',
                     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     INDEX `idx_reg_event` (`event_id`),
-                    INDEX `idx_reg_email` (`email`)
+                    INDEX `idx_reg_email_hash` (`email_hash`)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
 
                 "CREATE TABLE IF NOT EXISTS `{$prefix}registration_values` (
@@ -229,9 +234,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $allChecksOk) {
                 'mail_from_name'    => trim($form['site_title']),
                 'mail_transport'    => 'mail',
                 'main_site_url'     => '',
+                'main_site_label_de'=> 'Hauptseite',
+                'main_site_label_en'=> 'Main Website',
                 'forum_url'         => '',
+                'forum_label_de'    => 'Forum',
+                'forum_label_en'    => 'Forum',
                 'privacy_url'       => '',
                 'imprint_url'       => '',
+                'storage_notice_de' => 'Deine Anmeldedaten werden auf Servern in Deutschland / der EU gespeichert. Kontakt- und Gesundheitsdaten (mit 🔒 markiert) werden zusätzlich mit AES-256-GCM verschlüsselt in der Datenbank abgelegt.',
+                'storage_notice_en' => 'Your registration data is stored on servers in Germany / the EU. Contact and health data (marked with 🔒) are additionally stored encrypted using AES-256-GCM.',
                 // Standard E-Mail-Vorlagen (DE & EN)
                 'mail_tpl_doi_subject_de' => 'Bitte bestätige deine Anmeldung für {conname}',
                 'mail_tpl_doi_body_de'    => "<p>Hallo {vorname} {nachname},</p><p>vielen Dank für deine Anmeldung zur Veranstaltung <b>{conname}</b> ({condatum}) als <b>{gruppe}</b>.</p><p>Damit deine Anmeldung gültig wird, klicke bitte auf folgenden Bestätigungslink:</p><p><a href=\"{link}\">{link}</a></p><p>Viele Grüße<br>Deine Orga</p>",
@@ -326,6 +337,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $allChecksOk) {
             foreach ($defaultFields as $f) {
                 $stmtField->execute($f);
             }
+            $pdo->exec("UPDATE `{$prefix}form_fields` SET `is_encrypted` = 1 WHERE `is_sensitive` = 1 OR `field_key` IN ('email', 'telefon')");
 
             // Globale Standard-Listen-Vorlagen (event_id = NULL) anlegen
             $defaultViews = [

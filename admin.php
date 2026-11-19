@@ -10,6 +10,7 @@ use App\Modules\Admin\AdminLayout;
 use App\Modules\Events\EventAdminController;
 use App\Modules\FormBuilder\FormBuilderController;
 use App\Modules\Gdpr\GdprController;
+use App\Modules\Help\HelpController;
 use App\Modules\Lists\ListGeneratorController;
 use App\Modules\Registration\RegistrationAdminController;
 use App\Modules\Settings\SettingsController;
@@ -33,22 +34,39 @@ if ($action === 'logout') {
     exit;
 }
 
-// Login-Versuch verarbeiten
+// Schritt 1: Login-Versuch (E-Mail & Passwort)
 $loginError = '';
 if ($action === 'login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     Auth::requireCsrf();
     $email = trim((string)($_POST['email'] ?? ''));
     $pass  = (string)($_POST['password'] ?? '');
-    if (Auth::login($email, $pass)) {
+    $res   = Auth::attemptLogin($email, $pass);
+
+    if ($res === 'ok') {
         header('Location: admin.php');
+        exit;
+    } elseif ($res === '2fa') {
+        AdminLayout::renderLogin('', true);
         exit;
     }
     $loginError = 'E-Mail-Adresse oder Passwort ist ungültig.';
 }
 
-// Falls nicht eingeloggt: Login-Maske anzeigen
+// Schritt 2: 2FA-Code oder Einmal-Notfallcode prüfen
+if ($action === 'verify_2fa' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    Auth::requireCsrf();
+    $code = trim((string)($_POST['totp_code'] ?? ''));
+    if (Auth::verifyPending2fa($code)) {
+        header('Location: admin.php');
+        exit;
+    }
+    AdminLayout::renderLogin('Ungültiger 2FA- oder Notfallcode. Bitte versuche es erneut.', true);
+    exit;
+}
+
+// Falls noch 2FA-Schritt offen oder nicht eingeloggt: Login-Maske anzeigen
 if (!Auth::isOrga()) {
-    AdminLayout::renderLogin($loginError);
+    AdminLayout::renderLogin($loginError, Auth::hasPending2fa());
     exit;
 }
 
@@ -90,6 +108,9 @@ switch ($module) {
         break;
     case 'updater':
         SettingsController::handleUpdater();
+        break;
+    case 'help':
+        HelpController::handle();
         break;
     case 'dashboard':
     default:
