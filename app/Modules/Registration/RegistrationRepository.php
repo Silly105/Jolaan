@@ -3,14 +3,85 @@ declare(strict_types=1);
 
 namespace App\Modules\Registration;
 
+use App\Core\Auth;
 use App\Core\Crypto;
 use App\Core\Database;
+use App\Modules\Events\EventRepository;
 
 class RegistrationRepository
 {
     /**
-     * Speichert eine neue Anmeldung inklusive aller dynamischen Feldwerte.
-     * Die E-Mail-Adresse im Stammsatz wird AES-256-GCM verschlüsselt und mit einem HMAC-SHA256 Blind-Index (email_hash) versehen.
+     * Erzeugt eine formatierte Protokollzeile mit aktuellem Datum & Uhrzeit.
+     */
+    public static function formatLogLine(string $text, bool $includeActor = false): string
+    {
+        $actor = '';
+        if ($includeActor && Auth::check()) {
+            $u = Auth::user();
+            $actor = ' (durch ' . ($u['name'] ?? 'SL') . ')';
+        }
+        return date('d.m.Y H:i:s') . ' – ' . $text . $actor;
+    }
+
+    /**
+     * Hängt eine neue Zeile an das schreibgeschützte Verlaufs-Protokoll (history_log) einer Anmeldung an.
+     */
+    public static function appendHistoryLog(int $registrationId, string $message, bool $includeActor = false): void
+    {
+        $tRegs = Database::table('registrations');
+        $current = (string)Database::fetchScalar("SELECT history_log FROM {$tRegs} WHERE id = :id", ['id' => $registrationId]);
+        $line = self::formatLogLine($message, $includeActor);
+        $updated = trim($current) !== '' ? (rtrim($current) . "\n" . $line) : $line;
+        Database::query("UPDATE {$tRegs} SET history_log = :log WHERE id = :id", [
+            'log' => $updated,
+            'id'  => $registrationId,
+        ]);
+    }
+
+    /**
+     * Prüft zum Zeitpunkt der E-Mail-Bestätigung (oder manuellen Freischaltung), ob die gewählte Teilnehmergruppe
+     * bereits voll ist. Falls ja (und die Anmeldung nicht über den Geheim-Link kam), wird der Teilnehmer auf die
+     * Warteliste (is_waitlist = 1) gesetzt.
+     */
+    public static function determineWaitlistStatusOnConfirm(int $eventId, int $groupId, bool $isSecretUnlock): bool
+    {
+        if ($isSecretUnlock) {
+            return false; // Geheim-Link überspringt immer die Warteliste
+        }
+        $groups = EventRepository::getGroupsWithSeats($eventId);
+        foreach ($groups as $g) {
+            if ((int)$g['id'] === $groupId) {
+                return (bool)$g['is_full'];
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Berechnet den aktuellen Wartelistenplatz (1, 2, 3...) einer Anmeldung innerhalb ihrer Teilnehmergruppe
+     * anhand der Reihenfolge der E-Mail-Bestätigung (confirmed_at ASC, id ASC).
+     */
+    public static function getWaitlistPosition(int $eventId, int $groupId, int $registrationId): int
+    {
+        $tRegs = Database::table('registrations');
+        $rows = Database::fetchAll(
+            "SELECT id FROM {$tRegs}
+             WHERE event_id = :eid AND group_id = :gid AND is_confirmed = 1 AND is_waitlist = 1
+             ORDER BY confirmed_at ASC, id ASC",
+            ['eid' => $eventId, 'gid' => $groupId]
+        );
+        $pos = 1;
+        foreach ($rows as $r) {
+            if ((int)$r['id'] === $registrationId) {
+                return $pos;
+            }
+            $pos++;
+        }
+        return $pos;
+    }
+
+    /**
+     * Speichert eine neue Anmeldung inklusive aller dynamischen Feldwerte und erstem Protokolleintrag.
      */
     public static function create(
         int $eventId,
@@ -21,14 +92,24 @@ class RegistrationRepository
     ): int {
         $tRegs = Database::table('registrations');
 
-        $plainEmail = trim((string)($coreData['email'] ?? ''));
-        $encEmail   = $plainEmail !== '' ? Crypto::encrypt($plainEmail) : '';
-        $emailHash  = $plainEmail !== '' ? Crypto::blindIndex($plainEmail) : '';
+        $plainEmail     = trim((string)($coreData['email'] ?? ''));
+        $encEmail       = $plainEmail !== '' ? Crypto::encrypt($plainEmail) : '';
+        $emailHash      = $plainEmail !== '' ? Crypto::blindIndex($plainEmail) : '';
+        $isConfirmed    = (int)($coreData['is_confirmed'] ?? 0);
+        $isWaitlist     = (int)($coreData['is_waitlist'] ?? 0);
+        $isSecretUnlock = (int)($coreData['is_secret_unlock'] ?? 0);
+        $confirmedAt    = $isConfirmed === 1 ? ($coreData['confirmed_at'] ?? date('Y-m-d H:i:s')) : null;
+
+        $initialLog = $coreData['history_log'] ?? self::formatLogLine(
+            $isConfirmed === 1
+                ? 'Anmeldung manuell im Backend eingetragen und direkt freigeschaltet'
+                : 'Anmeldung über das Online-Formular eingegangen' . ($isSecretUnlock === 1 ? ' (über Geheim-Link)' : '')
+        );
 
         Database::query(
             "INSERT INTO {$tRegs}
-             (event_id, group_id, email, email_hash, first_name, last_name, birth_date, doi_token, is_confirmed, is_orga_confirmed, amount_paid, is_fully_paid, language)
-             VALUES (:eid, :gid, :email, :ehash, :fname, :lname, :bdate, :token, :conf, :oconf, :paid, :fullpaid, :lang)",
+             (event_id, group_id, email, email_hash, first_name, last_name, birth_date, doi_token, is_confirmed, is_waitlist, waitlist_confirmed, is_secret_unlock, is_orga_confirmed, amount_paid, is_fully_paid, language, confirmed_at, history_log)
+             VALUES (:eid, :gid, :email, :ehash, :fname, :lname, :bdate, :token, :conf, :wait, :wconf, :sec, :oconf, :paid, :fullpaid, :lang, :cat, :hlog)",
             [
                 'eid'      => $eventId,
                 'gid'      => $groupId,
@@ -38,11 +119,16 @@ class RegistrationRepository
                 'lname'    => $coreData['last_name'],
                 'bdate'    => $coreData['birth_date'] ?: null,
                 'token'    => $coreData['doi_token'] ?? '',
-                'conf'     => (int)($coreData['is_confirmed'] ?? 0),
+                'conf'     => $isConfirmed,
+                'wait'     => $isWaitlist,
+                'wconf'    => (int)($coreData['waitlist_confirmed'] ?? 0),
+                'sec'      => $isSecretUnlock,
                 'oconf'    => (int)($coreData['is_orga_confirmed'] ?? 0),
                 'paid'     => (float)($coreData['amount_paid'] ?? 0.0),
                 'fullpaid' => (int)($coreData['is_fully_paid'] ?? 0),
                 'lang'     => $coreData['language'] ?? 'de',
+                'cat'      => $confirmedAt,
+                'hlog'     => $initialLog,
             ]
         );
 
@@ -54,7 +140,6 @@ class RegistrationRepository
 
     /**
      * Aktualisiert die dynamischen Feldwerte einer bestehenden Anmeldung.
-     * Felder mit is_encrypted = 1 oder is_sensitive = 1 werden AES-256-GCM verschlüsselt.
      */
     public static function saveFieldValues(int $registrationId, array $fields, array $submittedValues): void
     {

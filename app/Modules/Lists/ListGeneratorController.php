@@ -14,17 +14,16 @@ class ListGeneratorController
     public static function handle(): void
     {
         $allEvents = EventRepository::all();
-        $eventId   = (int)($_REQUEST['event_id'] ?? ($allEvents[0]['id'] ?? 0));
+        $eventId   = (int)($_REQUEST['event_id'] ?? ($_SESSION['active_event_id'] ?? 0));
         $event     = $eventId > 0 ? EventRepository::find($eventId) : null;
 
         if (!$event) {
-            AdminLayout::render('Listen & Auswertungen', 'lists', '<div class="card"><div class="card-body">Bitte lege zuerst eine Veranstaltung an.</div></div>');
+            AdminLayout::render('Listen', 'lists', '<div class="card"><div class="card-body">Bitte wähle zuerst unter <a href="admin.php?module=dashboard">Übersicht</a> eine Veranstaltung aus.</div></div>');
             return;
         }
 
         $tViews = Database::table('saved_views');
 
-        // POST-Aktionen: Liste speichern, löschen oder Listen von anderer Veranstaltung kopieren
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && Auth::isAdmin()) {
             Auth::requireCsrf();
             $subAction = (string)($_POST['sub_action'] ?? '');
@@ -77,12 +76,11 @@ class ListGeneratorController
             }
         }
 
-        $savedViews = EventRepository::getSavedViews($eventId);
+        $savedViews  = EventRepository::getSavedViews($eventId);
         $globalViews = EventRepository::getSavedViews(null);
-        $groups     = EventRepository::getGroupsWithSeats($eventId);
-        $fields     = array_values(array_filter(EventRepository::getFields($eventId, true), fn($f) => $f['field_type'] !== 'heading'));
+        $groups      = EventRepository::getGroupsWithSeats($eventId);
+        $fields      = array_values(array_filter(EventRepository::getFields($eventId, true), fn($f) => $f['field_type'] !== 'heading'));
 
-        // Aktive Filter & Spalten aus gewählter Vorlage oder GET-Parametern bestimmen
         $selectedViewId = (int)($_GET['view_id'] ?? 0);
         $activeViewName = 'Individuelle Auswertung';
         $config = [
@@ -108,7 +106,6 @@ class ListGeneratorController
             }
         }
 
-        // Verfügbare Spalten definieren (Stammspalten + alle dynamischen Felder)
         $availableColumns = [
             'group'             => 'Teilnehmergruppe',
             'email'             => 'E-Mail-Adresse',
@@ -126,30 +123,26 @@ class ListGeneratorController
             }
         }
 
-        // Alle bestätigten Anmeldungen laden und filtern
+        // Alle bestätigten regulären Anmeldungen (oder bei Bedarf auch Warteliste) laden
         $allRegs = array_filter(
             RegistrationRepository::allForEvent($eventId, $event['start_date']),
-            fn($r) => (int)$r['is_confirmed'] === 1
+            fn($r) => (int)$r['is_confirmed'] === 1 && (int)($r['is_waitlist'] ?? 0) === 0
         );
 
         $filteredRegs = [];
         foreach ($allRegs as $r) {
-            // 1. Spezialfilter (Minderjährige zum Veranstaltungsbeginn / U18)
             if ($config['special_filter'] === 'under18' && !$r['is_under18']) {
                 continue;
             }
-            // 2. Gruppenfilter
             if ($config['group_id'] !== '' && (int)$r['group_id'] !== (int)$config['group_id']) {
                 continue;
             }
-            // 3. Zahlungsstatus-Filter
             if ($config['payment_status'] === 'paid' && (int)$r['is_fully_paid'] !== 1) {
                 continue;
             }
             if ($config['payment_status'] === 'unpaid' && (int)$r['is_fully_paid'] === 1) {
                 continue;
             }
-            // 4. Dynamischer Feldfilter
             if ($config['field_filter'] !== '') {
                 $fKey = $config['field_filter'];
                 $fVal = trim((string)($r['values'][$fKey] ?? ''));
@@ -168,7 +161,6 @@ class ListGeneratorController
             $filteredRegs[] = $r;
         }
 
-        // Helfer zum Auslesen eines Zellwerts
         $getCellValue = function (array $r, string $colKey): string {
             return match ($colKey) {
                 'group'             => (string)($r['group_name_de'] ?? ''),
@@ -185,13 +177,12 @@ class ListGeneratorController
 
         $selectedCols = array_values(array_filter($config['columns'], fn($c) => isset($availableColumns[$c])));
 
-        // CSV-Export ausgeben
+        // CSV-Export
         $exportFormat = (string)($_GET['export'] ?? '');
         if ($exportFormat === 'csv') {
             header('Content-Type: text/csv; charset=UTF-8');
             header('Content-Disposition: attachment; filename="liste_' . $eventId . '_' . date('Ymd_His') . '.csv"');
             $out = fopen('php://output', 'w');
-            // UTF-8 BOM für Excel
             fwrite($out, "\xEF\xBB\xBF");
             $headerRow = ['Nachname', 'Vorname'];
             foreach ($selectedCols as $cKey) {
@@ -210,7 +201,7 @@ class ListGeneratorController
             exit;
         }
 
-        // Druckansicht ausgeben
+        // Druckansicht
         if ($exportFormat === 'print') {
             ?>
             <!DOCTYPE html>
@@ -267,7 +258,6 @@ class ListGeneratorController
             exit;
         }
 
-        // Aktuelle Query-URL für Druck & CSV-Export bauen
         $currentQuery = $_GET;
         $currentQuery['module'] = 'lists';
         $currentQuery['event_id'] = $eventId;
@@ -276,40 +266,29 @@ class ListGeneratorController
         $csvUrl   = 'admin.php?' . http_build_query(array_merge($currentQuery, ['export' => 'csv']));
 
         ob_start();
-        echo AdminLayout::renderEventSubnav($event, 'lists');
         ?>
 
-        <!-- Veranstaltungs-Umschalter & Gespeicherte Listen-Vorlagen -->
+        <!-- Gespeicherte Listen-Vorlagen (untereinander, eine pro Zeile, ohne Veranstaltungs-Dropdown & ohne 📌/📥) -->
         <div class="card">
             <div class="card-header">
                 <h2>📋 Gespeicherte Auswertungslisten für „<?= e($event['title']) ?>“</h2>
-                <form method="get" action="admin.php" style="display:flex;gap:0.5rem;align-items:center;margin:0;">
-                    <input type="hidden" name="module" value="lists">
-                    <select name="event_id" onchange="this.form.submit()" style="width:auto;">
-                        <?php foreach ($allEvents as $evOpt): ?>
-                            <option value="<?= (int)$evOpt['id'] ?>" <?= (int)$evOpt['id'] === $eventId ? 'selected' : '' ?>>
-                                <?= e($evOpt['title']) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </form>
             </div>
             <div class="card-body">
-                <div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:0.75rem;">
+                <div style="display:flex;flex-direction:column;gap:0.45rem;max-width:640px;">
                     <?php foreach ($savedViews as $sv):
                         $vid = (int)$sv['id'];
                         $isActive = ($selectedViewId === $vid);
                     ?>
-                        <div style="display:inline-flex;align-items:center;background:<?= $isActive ? '#255E00' : '#f1f5f9' ?>;border-radius:6px;border:1px solid #cbd5e1;overflow:hidden;">
-                            <a href="admin.php?module=lists&event_id=<?= $eventId ?>&view_id=<?= $vid ?>" style="padding:0.4rem 0.85rem;text-decoration:none;font-weight:600;font-size:0.86rem;color:<?= $isActive ? '#fff' : '#1e293b' ?>;">
-                                📌 <?= e($sv['name']) ?>
+                        <div style="display:flex;align-items:center;justify-content:space-between;background:<?= $isActive ? 'var(--adm-accent)' : '#f8fafc' ?>;border-radius:6px;border:1px solid #cbd5e1;overflow:hidden;">
+                            <a href="admin.php?module=lists&event_id=<?= $eventId ?>&view_id=<?= $vid ?>" style="flex:1;padding:0.48rem 0.9rem;text-decoration:none;font-weight:600;font-size:0.88rem;color:<?= $isActive ? '#fff' : '#1e293b' ?>;">
+                                <?= e($sv['name']) ?>
                             </a>
                             <?php if (Auth::isAdmin()): ?>
                                 <form method="post" action="admin.php?module=lists&event_id=<?= $eventId ?>" onsubmit="return confirm('Gespeicherte Liste löschen?');" style="margin:0;">
                                     <?= Auth::csrfField() ?>
                                     <input type="hidden" name="sub_action" value="delete_view">
                                     <input type="hidden" name="delete_view_id" value="<?= $vid ?>">
-                                    <button type="submit" style="background:transparent;border:none;color:<?= $isActive ? '#fca5a5' : '#94a3b8' ?>;cursor:pointer;padding:0.4rem 0.5rem;font-weight:bold;" title="Liste löschen">✕</button>
+                                    <button type="submit" style="background:transparent;border:none;color:<?= $isActive ? '#fca5a5' : '#94a3b8' ?>;cursor:pointer;padding:0.45rem 0.7rem;font-weight:bold;" title="Liste löschen">✕</button>
                                 </form>
                             <?php endif; ?>
                         </div>
@@ -317,26 +296,26 @@ class ListGeneratorController
                 </div>
 
                 <?php if (Auth::isAdmin()): ?>
-                    <form method="post" action="admin.php?module=lists&event_id=<?= $eventId ?>" style="display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;margin-top:0.75rem;padding-top:0.75rem;border-top:1px solid #e2e8f0;">
+                    <form method="post" action="admin.php?module=lists&event_id=<?= $eventId ?>" style="display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;margin-top:1rem;padding-top:0.85rem;border-top:1px solid #e2e8f0;">
                         <?= Auth::csrfField() ?>
                         <input type="hidden" name="sub_action" value="copy_views_from_event">
-                        <span style="font-size:0.84rem;color:#64748b;">Listen aus anderer Veranstaltung übernehmen:</span>
+                        <span style="font-size:0.84rem;color:#64748b;">Listen aus anderer Veranstaltung übernehmen</span>
                         <select name="source_event_id" style="width:auto;padding:0.3rem 0.6rem;font-size:0.84rem;">
                             <option value="0">Globale Standard-Listen</option>
                             <?php foreach ($allEvents as $otherEv): if ((int)$otherEv['id'] === $eventId) continue; ?>
                                 <option value="<?= (int)$otherEv['id'] ?>"><?= e($otherEv['title']) ?></option>
                             <?php endforeach; ?>
                         </select>
-                        <button type="submit" class="btn btn-secondary btn-sm">📥 Listen hierher kopieren</button>
+                        <button type="submit" class="btn btn-secondary btn-sm">Listen hierher kopieren</button>
                     </form>
                 <?php endif; ?>
             </div>
         </div>
 
-        <!-- Dynamischer Filter- und Spalten-Konfigurator -->
+        <!-- Neue Auswertungsliste erstellen -->
         <div class="card">
             <div class="card-header">
-                <h2>🔍 Filter & Spalten zusammenstellen</h2>
+                <h2>🔍 Neue Auswertungsliste erstellen</h2>
             </div>
             <div class="card-body">
                 <form method="get" action="admin.php" id="filterForm">
@@ -376,7 +355,7 @@ class ListGeneratorController
 
                     <div class="grid-3">
                         <div class="form-group">
-                            <label>Nach Formularfeld filtern</label>
+                            <label>Nach Abfragefeld filtern</label>
                             <select name="field_filter">
                                 <option value="">— Kein Feldfilter —</option>
                                 <?php foreach ($fields as $f): ?>
@@ -401,7 +380,7 @@ class ListGeneratorController
                     </div>
 
                     <div class="form-group">
-                        <label>Angezeigte Spalten in der Tabelle / Druckansicht / CSV:</label>
+                        <label>Angezeigte Spalten in der Tabelle / Druckansicht / CSV</label>
                         <div style="display:flex;flex-wrap:wrap;gap:0.65rem;background:#f8fafc;padding:0.85rem;border-radius:6px;border:1px solid #e2e8f0;">
                             <?php foreach ($availableColumns as $colKey => $colLabel): ?>
                                 <label style="font-weight:400;font-size:0.86rem;margin:0;display:inline-flex;align-items:center;gap:0.3rem;cursor:pointer;">
@@ -427,7 +406,7 @@ class ListGeneratorController
                         <label style="font-weight:400;font-size:0.85rem;margin:0;">
                             <input type="checkbox" id="save_view_global_chk"> Auch als globale Vorlage speichern
                         </label>
-                        <button type="button" onclick="submitSaveCurrentView()" class="btn btn-secondary btn-sm">📌 Aktuelle Filter & Spalten als Liste speichern</button>
+                        <button type="button" onclick="submitSaveCurrentView()" class="btn btn-secondary btn-sm">Aktuelle Filter & Spalten als Liste speichern</button>
                     </div>
                     <script>
                     function submitSaveCurrentView() {
@@ -482,7 +461,7 @@ class ListGeneratorController
                                 <tr>
                                     <td><?= $i++ ?></td>
                                     <td>
-                                        <a href="admin.php?module=registrations&event_id=<?= $eventId ?>&action=edit&id=<?= (int)$r['id'] ?>" style="font-weight:600;color:#255E00;">
+                                        <a href="admin.php?module=registrations&event_id=<?= $eventId ?>&action=edit&id=<?= (int)$r['id'] ?>" style="font-weight:600;color:var(--adm-accent);">
                                             <?= e($r['last_name'] . ', ' . $r['first_name']) ?>
                                         </a>
                                     </td>
@@ -497,6 +476,6 @@ class ListGeneratorController
             </div>
         </div>
         <?php
-        AdminLayout::render('Listen, Filter & Export: ' . $event['title'], 'lists', (string)ob_get_clean(), $eventId);
+        AdminLayout::render('Listen – ' . $event['title'], 'lists', (string)ob_get_clean(), $eventId);
     }
 }

@@ -5,7 +5,7 @@ namespace App\Core;
 
 class Version
 {
-    public const CURRENT = '0.9.002';
+    public const CURRENT = '0.9.003';
 
     /**
      * Fortlaufende Änderungshistorie & Migrations-Schritte.
@@ -50,6 +50,18 @@ class Version
                     'Auf der Anmeldeseite: Prominente Anzeige der Orga-Kontaktadresse, global konfigurierbarer Hinweis zum Datenspeicherstandort (DE/EN) und dezentes Schloss-Icon (ohne „DSGVO“-Text)',
                     'Zweisprachig anpassbare Linktexte für Hauptseite und Forum in den globalen Einstellungen; Buttons auf der Startseite verkürzt („Flyer“, „Forum“) und Orga-Button entfernt',
                     'Rolle „Orga / SL“ durchgehend in „SL“ umbenannt (inkl. Deaktivierung des Versions-Links für SL) und Dashboard-Badges bereinigt',
+                ],
+            ],
+            '0.9.003' => [
+                'date'    => '2026-11-20',
+                'title'   => 'Wartelisten-System, Interne Teilnehmergruppen („Absagen“), Verlaufs-Protokoll & Menü-Überarbeitung',
+                'changes' => [
+                    'Komplettes Wartelisten-System: Pro Veranstaltung aktivierbar; Zeitpunkt der E-Mail-Bestätigung entscheidet über regulären Platz oder Wartelisten-Rang (Geheim-Link überspringt Warteliste)',
+                    'Wartelisten-Verwaltung in der Anmeldeverwaltung inkl. Buttons „Wartelistenplatz bestätigen“ (sendet zweisprachige E-Mail mit aktuellem {wartelistenplatz}) und „Anmeldung freigeben“',
+                    'Neue Option „In Anmeldung anzeigen“ bei Teilnehmergruppen für interne Gruppen (Standardgruppe „Absagen“ wird automatisch angelegt)',
+                    'Seite „Verfügbare Plätze“ ist nun auch für die Rolle SL freigegeben',
+                    'Automatisches, schreibgeschütztes Verlaufs- & Zeitprotokoll pro Teilnehmer (Anmeldung, E-Mail-Bestätigung, Warteliste, Nachrücken, versendete Bestätigungen & Zahlungserinnerungen)',
+                    'Menüführung im Backend komplett überarbeitet: Dauerhafte Anzeige der gewählten Veranstaltung als eigene Menü-Kategorie, Entfernung der Emoji-Symbole und oberen Subnav-Buttons, klare Umbenennungen („Abfragefelder“, „Verfügbare Plätze“, „Seiteneinstellungen“ etc.) und durchgängige Bezeichnung „E-Mail-Bestätigung“',
                 ],
             ],
         ];

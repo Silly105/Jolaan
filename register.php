@@ -32,13 +32,14 @@ if (!$event) {
     exit;
 }
 
-$allowEnglish = (int)$event['is_bilingual'] === 1;
+$allowEnglish    = (int)$event['is_bilingual'] === 1;
+$waitlistEnabled = (int)($event['waitlist_enabled'] ?? 1) === 1;
 I18n::init($allowEnglish);
 
 $pageTitle = $event['title'] . (!empty($event['subtitle']) ? ' – ' . $event['subtitle'] : '') . ' (' . I18n::t('reg.title') . ')';
 $orgaContactEmail = trim((string)$event['admin_email']) ?: (string)Database::getSetting('mail_from_address', '');
 
-// 1. Double-Opt-In Bestätigungslink verarbeiten
+// 1. E-Mail-Bestätigungslink verarbeiten (Zeitpunkt der Bestätigung entscheidet über Warteliste!)
 if ($action === 'confirm') {
     $regId = (int)($_GET['id'] ?? 0);
     $token = trim((string)($_GET['token'] ?? ''));
@@ -59,7 +60,24 @@ if ($action === 'confirm') {
         exit;
     }
 
-    Database::query("UPDATE {$tRegs} SET is_confirmed = 1 WHERE id = :id", ['id' => $regId]);
+    // Zum jetzigen Zeitpunkt prüfen, ob in der Teilnehmergruppe noch ein regulärer Platz frei ist
+    $isSecretUnlock = (int)($reg['is_secret_unlock'] ?? 0) === 1;
+    $mustGoToWaitlist = RegistrationRepository::determineWaitlistStatusOnConfirm($eventId, (int)$reg['group_id'], $isSecretUnlock);
+    $now = date('Y-m-d H:i:s');
+
+    Database::query(
+        "UPDATE {$tRegs} SET is_confirmed = 1, is_waitlist = :wait, confirmed_at = :cat WHERE id = :id",
+        ['wait' => $mustGoToWaitlist ? 1 : 0, 'cat' => $now, 'id' => $regId]
+    );
+
+    $waitPos = 0;
+    if ($mustGoToWaitlist) {
+        $waitPos = RegistrationRepository::getWaitlistPosition($eventId, (int)$reg['group_id'], $regId);
+        RegistrationRepository::appendHistoryLog($regId, "E-Mail-Bestätigung durch Teilnehmer erfolgt – Gruppe ausgebucht, daher auf Warteliste gesetzt (Startplatz #{$waitPos})");
+    } else {
+        RegistrationRepository::appendHistoryLog($regId, 'E-Mail-Bestätigung durch Teilnehmer erfolgt (Reguläre Teilnehmerliste' . ($isSecretUnlock ? ' via Geheim-Link' : '') . ')');
+    }
+
     $decryptedEmail = Crypto::decrypt((string)$reg['email']);
 
     // Benachrichtigung an die Orga senden
@@ -68,14 +86,21 @@ if ($action === 'confirm') {
         $host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
         $dir    = rtrim(dirname($_SERVER['PHP_SELF']), '/\\');
         $adminLink = "{$scheme}://{$host}{$dir}/admin.php?module=registrations&event_id={$eventId}&action=edit&id={$regId}";
+        $statusHint = $mustGoToWaitlist ? "<p style=\"color:#b45309;font-weight:bold;\">⚠️ Hinweis: Gruppe ausgebucht – Teilnehmer steht auf der Warteliste (Platz #{$waitPos}).</p>" : '';
         $orgaBody = "<p>Neue bestätigte Online-Anmeldung für <b>" . e($event['title']) . "</b>:</p>"
+                  . $statusHint
                   . "<ul><li><b>Name:</b> " . e($reg['first_name'] . ' ' . $reg['last_name']) . "</li>"
                   . "<li><b>E-Mail:</b> " . e($decryptedEmail) . "</li></ul>"
                   . "<p><a href=\"" . e($adminLink) . "\">Anmeldung im Orga-Backend ansehen &rarr;</a></p>";
-        Mailer::send($orgaContactEmail, 'Neue Anmeldung: ' . $event['title'] . ' (' . $reg['first_name'] . ' ' . $reg['last_name'] . ')', $orgaBody);
+        $subjPrefix = $mustGoToWaitlist ? 'Neue Wartelisten-Anmeldung: ' : 'Neue Anmeldung: ';
+        Mailer::send($orgaContactEmail, $subjPrefix . $event['title'] . ' (' . $reg['first_name'] . ' ' . $reg['last_name'] . ')', $orgaBody);
     }
 
-    $msg = I18n::t('reg.doi_ok_text', $reg['first_name'] . ' ' . $reg['last_name'], $event['title']);
+    if ($mustGoToWaitlist) {
+        $msg = I18n::t('reg.doi_waitlist_text', $reg['first_name'] . ' ' . $reg['last_name'], $event['title'], $waitPos);
+    } else {
+        $msg = I18n::t('reg.doi_ok_text', $reg['first_name'] . ' ' . $reg['last_name'], $event['title']);
+    }
     Theme::render($pageTitle, '<div class="alert alert-success"><h3>' . e(I18n::t('reg.doi_ok_title')) . '</h3><p>' . e($msg) . '</p></div><p><a href="index.php" class="btn btn-secondary">&larr; ' . e(I18n::t('nav.home')) . '</a></p>', ['event' => $event]);
     exit;
 }
@@ -88,7 +113,6 @@ if ($unlockReq !== '') {
 $savedUnlock = (string)($_SESSION['unlocked_event_' . $eventId] ?? '');
 $isUnlockedBySecret = ($event['unlock_password'] !== '' && hash_equals((string)$event['unlock_password'], $savedUnlock));
 
-// Wenn Con gesperrt und nicht per Geheimlink entsperrt
 if ($event['status'] === 'locked' && !$isUnlockedBySecret) {
     ob_start();
     ?>
@@ -116,8 +140,9 @@ if ($event['status'] === 'locked' && !$isUnlockedBySecret) {
     exit;
 }
 
-// 3. Teilnehmergruppen & Formularfelder laden (nur öffentliche Felder: is_orga_only = 0)
-$groups = EventRepository::getGroupsWithSeats($eventId);
+// 3. Teilnehmergruppen (nur solche mit show_in_registration = 1!) & Formularfelder laden
+$allGroups = EventRepository::getGroupsWithSeats($eventId);
+$groups = array_values(array_filter($allGroups, fn($g) => (int)($g['show_in_registration'] ?? 1) === 1));
 $fields = EventRepository::getFields($eventId, false);
 
 $errors = [];
@@ -126,7 +151,6 @@ $submittedGroup = (int)($_POST['group_id'] ?? 0);
 $submittedVals  = $_POST['f'] ?? [];
 $registrationSuccess = false;
 
-// Zeitstempel für unsichtbaren Bot-Schutz beim Öffnen des Formulars setzen
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     $_SESSION['form_render_ts_' . $eventId] = time();
 }
@@ -134,14 +158,13 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     Auth::requireCsrf();
 
-    // Unsichtbarer Anti-Bot-Check (Honeypot + Mindestausfüllzeit 2 Sekunden)
     $honeypot = trim((string)($_POST['website_url_hp'] ?? ''));
     $renderTs = (int)($_SESSION['form_render_ts_' . $eventId] ?? 0);
     if ($honeypot !== '' || ($renderTs > 0 && (time() - $renderTs) < 2)) {
         $errors[] = I18n::t('reg.error_bot');
     }
 
-    // Teilnehmergruppe validieren
+    // Teilnehmergruppe validieren (wenn voll, nur erlaubt falls Warteliste aktiv oder Geheim-Link)
     $selectedGroupObj = null;
     foreach ($groups as $g) {
         if ((int)$g['id'] === $submittedGroup) {
@@ -149,18 +172,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             break;
         }
     }
-    if (!$selectedGroupObj || ($selectedGroupObj['is_full'] && !$isUnlockedBySecret)) {
+    if (!$selectedGroupObj || ($selectedGroupObj['is_full'] && !$waitlistEnabled && !$isUnlockedBySecret)) {
         $errors[] = I18n::t('reg.error_group');
         $invalidKeys['group_id'] = true;
     }
 
-    // Dynamische Felder validieren & System-Mapping extrahieren
     $coreData = [
-        'first_name' => '',
-        'last_name'  => '',
-        'email'      => '',
-        'birth_date' => null,
-        'language'   => I18n::lang(),
+        'first_name'       => '',
+        'last_name'        => '',
+        'email'            => '',
+        'birth_date'       => null,
+        'language'         => I18n::lang(),
+        'is_secret_unlock' => $isUnlockedBySecret ? 1 : 0,
     ];
 
     foreach ($fields as $field) {
@@ -205,7 +228,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // Dublettenprüfung pro Veranstaltung über den HMAC-SHA256 Blind-Index (email_hash)
     if ($coreData['email'] !== '') {
         $tRegs = Database::table('registrations');
         $emailHash = Crypto::blindIndex($coreData['email']);
@@ -225,7 +247,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $regId = RegistrationRepository::create($eventId, $submittedGroup, $coreData, $fields, $submittedVals);
 
-        // Double-Opt-In E-Mail an Teilnehmer senden
+        // E-Mail-Bestätigung an Teilnehmer senden
         $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
         $host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
         $dir    = rtrim(dirname($_SERVER['PHP_SELF']), '/\\');
@@ -254,6 +276,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 Mailer::parseTemplate($tplBody, $vars),
                 $orgaContactEmail ?: null
             );
+            RegistrationRepository::appendHistoryLog($regId, 'E-Mail mit Bestätigungslink an Teilnehmer gesendet');
         }
 
         $registrationSuccess = true;
@@ -317,29 +340,50 @@ ob_start();
             <input type="text" id="website_url_hp" name="website_url_hp" tabindex="-1" autocomplete="off">
         </div>
 
-        <!-- Auswahl der Teilnehmergruppe (SC / NSC / Team ...) -->
+        <!-- Auswahl der Teilnehmergruppe (SC / NSC / Team ...) inkl. Wartelisten-Kennzeichnung -->
         <div class="form-group">
             <label class="form-label" for="group_id">
                 <?= e(I18n::t('reg.select_group')) ?><span class="req-star">*</span>
             </label>
-            <select id="group_id" name="group_id" class="form-control <?= isset($invalidKeys['group_id']) ? 'is-invalid' : '' ?>" required>
-                <option value="0"><?= e(I18n::t('reg.please_select')) ?></option>
+            <select id="group_id" name="group_id" class="form-control <?= isset($invalidKeys['group_id']) ? 'is-invalid' : '' ?>" onchange="checkWaitlistNotice()" required>
+                <option value="0" data-waitlist="0"><?= e(I18n::t('reg.please_select')) ?></option>
                 <?php foreach ($groups as $g):
                     $gid = (int)$g['id'];
                     $gLabel = I18n::field($g, 'name');
-                    $disabled = ($g['is_full'] && !$isUnlockedBySecret);
-                    if ($disabled) {
+                    $isFull = (bool)$g['is_full'];
+                    $isWaitlistOption = ($isFull && $waitlistEnabled && !$isUnlockedBySecret);
+                    $disabled = ($isFull && !$waitlistEnabled && !$isUnlockedBySecret);
+
+                    if ($isWaitlistOption) {
+                        $gLabel .= ' ' . I18n::t('reg.group_waitlist');
+                    } elseif ($disabled) {
                         $gLabel .= ' ' . I18n::t('reg.group_full');
                     } elseif ($g['calculated_free'] !== null && (int)$g['show_on_index'] === 1) {
                         $gLabel .= ' (' . (int)$g['calculated_free'] . ' ' . I18n::t('index.free_seats') . ')';
                     }
                 ?>
-                    <option value="<?= $gid ?>" <?= $submittedGroup === $gid ? 'selected' : '' ?> <?= $disabled ? 'disabled' : '' ?>>
+                    <option value="<?= $gid ?>" data-waitlist="<?= $isWaitlistOption ? '1' : '0' ?>" <?= $submittedGroup === $gid ? 'selected' : '' ?> <?= $disabled ? 'disabled' : '' ?>>
                         <?= e($gLabel) ?>
                     </option>
                 <?php endforeach; ?>
             </select>
+
+            <!-- Deutlicher orangener Hinweis-Kasten, sobald eine ausgebuchte Gruppe mit Warteliste ausgewählt wird -->
+            <div id="waitlist_notice_box" style="display:none;margin-top:0.75rem;padding:0.9rem 1.1rem;background:#fffbeb;border:2px solid #f59e0b;border-radius:6px;color:#92400e;font-weight:600;font-size:0.92rem;">
+                <?= e(I18n::t('reg.waitlist_warning')) ?>
+            </div>
         </div>
+
+        <script>
+        function checkWaitlistNotice() {
+            const sel = document.getElementById('group_id');
+            const box = document.getElementById('waitlist_notice_box');
+            if (!sel || !box) return;
+            const opt = sel.options[sel.selectedIndex];
+            box.style.display = (opt && opt.getAttribute('data-waitlist') === '1') ? 'block' : 'none';
+        }
+        document.addEventListener('DOMContentLoaded', checkWaitlistNotice);
+        </script>
 
         <!-- Dynamische Felder aus dem Formular-Baukasten -->
         <?php foreach ($fields as $field):

@@ -353,7 +353,7 @@ class SettingsController
             </div>
         </div>
         <?php
-        AdminLayout::render('Globales Design & Systemeinstellungen', 'settings', (string)ob_get_clean());
+        AdminLayout::render('Seiteneinstellungen', 'settings', (string)ob_get_clean());
     }
 
     public static function handleMailTemplates(): void
@@ -364,10 +364,11 @@ class SettingsController
         }
 
         $templates = [
-            'doi'      => '1. Double-Opt-In Bestätigungslink (direkt nach Absenden des Formulars)',
-            'confirm'  => '2. Anmeldebestätigung durch die Orga',
-            'reminder' => '3. Zahlungserinnerung',
-            'paid'     => '4. Geldeingangsbestätigung',
+            'doi'      => 'E-Mail-Bestätigung (Bestätigungslink direkt nach Absenden des Formulars)',
+            'waitlist' => 'Wartelistenplatz bestätigen (mit aktuellem {wartelistenplatz})',
+            'confirm'  => 'Anmeldebestätigung durch die Orga',
+            'reminder' => 'Zahlungserinnerung',
+            'paid'     => 'Geldeingangsbestätigung',
         ];
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -392,7 +393,7 @@ class SettingsController
         ob_start();
         ?>
         <div class="alert" style="background:#eff6ff;border:1px solid #93c5fd;color:#1e3a8a;">
-            💡 <strong>Verfügbare Platzhalter:</strong> <code>{vorname}</code>, <code>{nachname}</code>, <code>{conname}</code>, <code>{condatum}</code>, <code>{gruppe}</code>, <code>{betrag}</code>, <code>{link}</code> (HTML ist erlaubt).
+            💡 <strong>Verfügbare Platzhalter:</strong> <code>{vorname}</code>, <code>{nachname}</code>, <code>{conname}</code>, <code>{condatum}</code>, <code>{gruppe}</code>, <code>{betrag}</code>, <code>{link}</code>, <code>{wartelistenplatz}</code> (HTML ist erlaubt).
         </div>
 
         <form method="post" action="admin.php?module=mailtemplates">
@@ -773,7 +774,7 @@ class SettingsController
                             Schütze deinen Account mit einer Authenticator-App (z. B. <em>Google Authenticator, Aegis, Bitwarden, 1Password, Apple Passwörter</em>). Es werden <strong>keine externen Dienste</strong> eingebunden.
                         </p>
                         <div class="form-group">
-                            <label for="totp_secret_input">1. Einrichtungsschlüssel (Base32) in deiner Authenticator-App eintragen</label>
+                            <label for="totp_secret_input">Einrichtungsschlüssel (Base32) in deiner Authenticator-App eintragen</label>
                             <div class="copy-input-wrap">
                                 <input type="text" id="totp_secret_input" readonly value="<?= e($setupSecret) ?>" onclick="this.select()" style="font-family:monospace;font-weight:700;">
                                 <button type="button" class="copy-icon-btn" onclick="copyInputToClipboard('totp_secret_input', this)" title="Schlüssel kopieren">📋</button>
@@ -785,7 +786,7 @@ class SettingsController
                             <?= Auth::csrfField() ?>
                             <input type="hidden" name="sub_action" value="enable_2fa">
                             <div class="form-group">
-                                <label for="totp_verify_code">2. Angezeigten 6-stelligen Code aus der App zur Bestätigung eingeben</label>
+                                <label for="totp_verify_code">Angezeigten 6-stelligen Code aus der App zur Bestätigung eingeben</label>
                                 <input type="text" id="totp_verify_code" name="totp_verify_code" placeholder="123456" pattern="\d{6}" maxlength="6" autocomplete="one-time-code" required>
                             </div>
                             <button type="submit" class="btn btn-primary">🔐 2FA jetzt aktivieren & Notfallcodes erzeugen</button>

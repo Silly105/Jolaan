@@ -74,7 +74,6 @@ class Updater
             $tRegs   = Database::table('registrations');
             $tVals   = Database::table('registration_values');
 
-            // 1. 2FA-Spalten in users ergänzen
             if (!self::columnExists($tUsers, 'totp_secret')) {
                 $pdo->exec("ALTER TABLE {$tUsers}
                     ADD COLUMN `totp_secret` VARCHAR(255) NULL DEFAULT NULL AFTER `is_active`,
@@ -82,25 +81,20 @@ class Updater
                     ADD COLUMN `totp_backup_codes` TEXT NULL DEFAULT NULL AFTER `totp_enabled`");
             }
 
-            // 2. Spalte is_encrypted in form_fields ergänzen und für E-Mail, Telefon & sensible Felder aktivieren
             if (!self::columnExists($tFields, 'is_encrypted')) {
                 $pdo->exec("ALTER TABLE {$tFields} ADD COLUMN `is_encrypted` TINYINT(1) NOT NULL DEFAULT 0 AFTER `is_required`");
                 $pdo->exec("UPDATE {$tFields} SET `is_encrypted` = 1 WHERE `is_sensitive` = 1 OR `field_type` = 'email' OR `system_mapping` = 'email' OR `field_key` IN ('email', 'telefon', 'handy', 'phone')");
             }
 
-            // 3. Spalte email (Text für Chiffretext) & email_hash in registrations ergänzen
             if (!self::columnExists($tRegs, 'email_hash')) {
-                // Alten Index idx_reg_email entfernen, falls vorhanden (da TEXT keinen vollen Index ohne Länge erlaubt)
                 try {
                     $pdo->exec("ALTER TABLE {$tRegs} DROP INDEX `idx_reg_email`");
                 } catch (\Throwable) {
-                    // Index existierte nicht
                 }
                 $pdo->exec("ALTER TABLE {$tRegs} MODIFY COLUMN `email` TEXT NOT NULL");
                 $pdo->exec("ALTER TABLE {$tRegs} ADD COLUMN `email_hash` VARCHAR(64) NOT NULL DEFAULT '' AFTER `email`, ADD INDEX `idx_reg_email_hash` (`email_hash`)");
             }
 
-            // 4. Bestehende Klartext-E-Mails in registrations und Klartext-Werte verschlüsselter Felder nachverschlüsseln
             $allRegs = Database::fetchAll("SELECT id, email FROM {$tRegs}");
             foreach ($allRegs as $r) {
                 $rawEmail = (string)$r['email'];
@@ -131,7 +125,6 @@ class Updater
                 ]);
             }
 
-            // 5. Neue Standard-Settings für v0.9.002 setzen (falls noch nicht vorhanden)
             if (Database::getSetting('main_site_label_de') === null) {
                 Database::setSetting('main_site_label_de', 'Hauptseite');
                 Database::setSetting('main_site_label_en', 'Main Website');
@@ -139,6 +132,71 @@ class Updater
                 Database::setSetting('forum_label_en', 'Forum');
                 Database::setSetting('storage_notice_de', 'Deine Anmeldedaten werden auf Servern in Deutschland / der EU gespeichert. Kontakt- und Gesundheitsdaten (mit 🔒 markiert) werden zusätzlich mit AES-256-GCM verschlüsselt in der Datenbank abgelegt.');
                 Database::setSetting('storage_notice_en', 'Your registration data is stored on servers in Germany / the EU. Contact and health data (marked with 🔒) are additionally stored encrypted using AES-256-GCM.');
+            }
+        }
+
+        if ($version === '0.9.003') {
+            $tEvents = Database::table('events');
+            $tGroups = Database::table('event_groups');
+            $tRegs   = Database::table('registrations');
+
+            // 1. waitlist_enabled in events
+            if (!self::columnExists($tEvents, 'waitlist_enabled')) {
+                $pdo->exec("ALTER TABLE {$tEvents} ADD COLUMN `waitlist_enabled` TINYINT(1) NOT NULL DEFAULT 1 AFTER `status`");
+            }
+
+            // 2. show_in_registration in event_groups + Standard-Interngruppe "Absagen" ergänzen
+            if (!self::columnExists($tGroups, 'show_in_registration')) {
+                $pdo->exec("ALTER TABLE {$tGroups} ADD COLUMN `show_in_registration` TINYINT(1) NOT NULL DEFAULT 1 AFTER `show_on_index`");
+            }
+
+            // Prüfen, ob in den globalen Vorlagen (event_id IS NULL) und bestehenden Events schon eine Gruppe "Absagen" existiert
+            $globalAbsagen = Database::fetchOne("SELECT id FROM {$tGroups} WHERE event_id IS NULL AND name_de = 'Absagen' LIMIT 1");
+            if (!$globalAbsagen) {
+                Database::query(
+                    "INSERT INTO {$tGroups} (event_id, name_de, name_en, max_seats, is_locked, show_on_index, show_in_registration, sort_order)
+                     VALUES (NULL, 'Absagen', 'Cancellations', 0, 0, 0, 0, 90)"
+                );
+            }
+            $allEvents = Database::fetchAll("SELECT id FROM {$tEvents}");
+            foreach ($allEvents as $evRow) {
+                $eid = (int)$evRow['id'];
+                $evAbs = Database::fetchOne("SELECT id FROM {$tGroups} WHERE event_id = :eid AND name_de = 'Absagen' LIMIT 1", ['eid' => $eid]);
+                if (!$evAbs) {
+                    Database::query(
+                        "INSERT INTO {$tGroups} (event_id, name_de, name_en, max_seats, is_locked, show_on_index, show_in_registration, sort_order)
+                         VALUES (:eid, 'Absagen', 'Cancellations', 0, 0, 0, 0, 90)",
+                        ['eid' => $eid]
+                    );
+                }
+            }
+
+            // 3. Wartelisten- & Verlaufs-Protokoll-Spalten in registrations ergänzen
+            if (!self::columnExists($tRegs, 'is_waitlist')) {
+                $pdo->exec("ALTER TABLE {$tRegs}
+                    ADD COLUMN `is_waitlist` TINYINT(1) NOT NULL DEFAULT 0 AFTER `is_confirmed`,
+                    ADD COLUMN `waitlist_confirmed` TINYINT(1) NOT NULL DEFAULT 0 AFTER `is_waitlist`,
+                    ADD COLUMN `is_secret_unlock` TINYINT(1) NOT NULL DEFAULT 0 AFTER `waitlist_confirmed`,
+                    ADD COLUMN `confirmed_at` DATETIME NULL DEFAULT NULL AFTER `created_at`,
+                    ADD COLUMN `history_log` TEXT NULL DEFAULT NULL AFTER `confirmed_at`");
+
+                // Für bestehende bestätigte Anmeldungen confirmed_at und initiales Protokoll füllen
+                $pdo->exec("UPDATE {$tRegs} SET `confirmed_at` = `created_at` WHERE `is_confirmed` = 1 AND `confirmed_at` IS NULL");
+                $pdo->exec("UPDATE {$tRegs} SET `history_log` = CONCAT(DATE_FORMAT(`created_at`, '%d.%m.%Y %H:%i:%s'), ' – Anmeldung im System eingegangen\n', IF(`is_confirmed` = 1, CONCAT(DATE_FORMAT(`created_at`, '%d.%m.%Y %H:%i:%s'), ' – E-Mail-Bestätigung erfolgt (Reguläre Teilnehmerliste)'), '')) WHERE `history_log` IS NULL");
+            }
+
+            // 4. Neue E-Mail-Vorlage für "Wartelistenplatz bestätigen" (DE & EN) anlegen
+            if (Database::getSetting('mail_tpl_waitlist_subject_de') === null) {
+                Database::setSetting('mail_tpl_waitlist_subject_de', 'Dein Wartelistenplatz für {conname}');
+                Database::setSetting(
+                    'mail_tpl_waitlist_body_de',
+                    "<p>Hallo {vorname} {nachname},</p><p>wir bestätigen den Eingang deiner Anmeldung für <b>{conname}</b> ({condatum}) in der Gruppe <b>{gruppe}</b>.</p><p>Da diese Teilnehmergruppe zum Zeitpunkt deiner E-Mail-Bestätigung bereits ausgebucht war, stehst du aktuell auf der <b>Warteliste auf Platz {wartelistenplatz}</b>.</p><p>Bitte überweise noch keinen Teilnahmebeitrag. Sobald ein Platz für dich frei wird, melden wir uns umgehend bei dir!</p><p>Viele Grüße<br>Deine Orga</p>"
+                );
+                Database::setSetting('mail_tpl_waitlist_subject_en', 'Your Waiting List Spot for {conname}');
+                Database::setSetting(
+                    'mail_tpl_waitlist_body_en',
+                    "<p>Hello {vorname} {nachname},</p><p>we confirm receipt of your registration for <b>{conname}</b> ({condatum}) in the group <b>{gruppe}</b>.</p><p>Since this participant group was already fully booked at the time of your email confirmation, you are currently on the <b>waiting list at position #{wartelistenplatz}</b>.</p><p>Please do not transfer any participation fee yet. As soon as a spot becomes available for you, we will contact you!</p><p>Best regards<br>The Organizers</p>"
+                );
             }
         }
     }

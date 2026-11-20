@@ -31,6 +31,7 @@ class EventRepository
 
     /**
      * Lädt die Teilnehmergruppen einer Veranstaltung inkl. automatisch berechneter (oder manuell überschriebener) freier Plätze.
+     * Für die Platzberechnung zählen nur bestätigte reguläre Anmeldungen (is_confirmed = 1 AND is_waitlist = 0).
      */
     public static function getGroupsWithSeats(?int $eventId): array
     {
@@ -42,7 +43,8 @@ class EventRepository
         }
 
         $sql = "SELECT g.*,
-                       (SELECT COUNT(*) FROM {$tRegs} r WHERE r.event_id = g.event_id AND r.group_id = g.id AND r.is_confirmed = 1) AS confirmed_count,
+                       (SELECT COUNT(*) FROM {$tRegs} r WHERE r.event_id = g.event_id AND r.group_id = g.id AND r.is_confirmed = 1 AND r.is_waitlist = 0) AS confirmed_count,
+                       (SELECT COUNT(*) FROM {$tRegs} r WHERE r.event_id = g.event_id AND r.group_id = g.id AND r.is_confirmed = 1 AND r.is_waitlist = 1) AS waitlist_count,
                        (SELECT COUNT(*) FROM {$tRegs} r WHERE r.event_id = g.event_id AND r.group_id = g.id) AS total_count
                 FROM {$tGroups} g
                 WHERE g.event_id = :eid
@@ -50,9 +52,9 @@ class EventRepository
         $groups = Database::fetchAll($sql, ['eid' => $eventId]);
 
         foreach ($groups as &$g) {
-            $maxSeats = (int)$g['max_seats'];
+            $maxSeats  = (int)$g['max_seats'];
             $confirmed = (int)$g['confirmed_count'];
-            $override = $g['manual_free_override'];
+            $override  = $g['manual_free_override'];
 
             if ($override !== null && $override !== '') {
                 $free = max(0, (int)$override);
@@ -61,7 +63,6 @@ class EventRepository
                 $free = max(0, $maxSeats - $confirmed);
                 $isOverridden = false;
             } else {
-                // Unbegrenzt (max_seats = 0)
                 $free = null;
                 $isOverridden = false;
             }
@@ -110,19 +111,20 @@ class EventRepository
         $tFields = Database::table('form_fields');
         $tViews  = Database::table('saved_views');
 
-        // 1. Gruppen klonen
+        // 1. Gruppen klonen (inkl. show_in_registration)
         $sourceGroups = self::getGroupsWithSeats($sourceEventId);
         foreach ($sourceGroups as $g) {
             Database::query(
-                "INSERT INTO {$tGroups} (event_id, name_de, name_en, max_seats, manual_free_override, is_locked, show_on_index, sort_order)
-                 VALUES (:eid, :nde, :nen, :max, NULL, 0, :show, :sort)",
+                "INSERT INTO {$tGroups} (event_id, name_de, name_en, max_seats, manual_free_override, is_locked, show_on_index, show_in_registration, sort_order)
+                 VALUES (:eid, :nde, :nen, :max, NULL, 0, :show, :showreg, :sort)",
                 [
-                    'eid'  => $targetEventId,
-                    'nde'  => $g['name_de'],
-                    'nen'  => $g['name_en'],
-                    'max'  => (int)$g['max_seats'],
-                    'show' => (int)$g['show_on_index'],
-                    'sort' => (int)$g['sort_order'],
+                    'eid'     => $targetEventId,
+                    'nde'     => $g['name_de'],
+                    'nen'     => $g['name_en'],
+                    'max'     => (int)$g['max_seats'],
+                    'show'    => (int)$g['show_on_index'],
+                    'showreg' => (int)($g['show_in_registration'] ?? 1),
+                    'sort'    => (int)$g['sort_order'],
                 ]
             );
         }

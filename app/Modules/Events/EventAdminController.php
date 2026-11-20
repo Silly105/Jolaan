@@ -20,8 +20,9 @@ class EventAdminController
             $eid = (int)$ev['id'];
             $ev['groups'] = EventRepository::getGroupsWithSeats($eid);
             $ev['total_regs'] = (int)Database::fetchScalar("SELECT COUNT(*) FROM {$tRegs} WHERE event_id = :eid", ['eid' => $eid]);
-            $ev['confirmed_regs'] = (int)Database::fetchScalar("SELECT COUNT(*) FROM {$tRegs} WHERE event_id = :eid AND is_confirmed = 1", ['eid' => $eid]);
-            $ev['unpaid_regs'] = (int)Database::fetchScalar("SELECT COUNT(*) FROM {$tRegs} WHERE event_id = :eid AND is_confirmed = 1 AND is_fully_paid = 0", ['eid' => $eid]);
+            $ev['confirmed_regs'] = (int)Database::fetchScalar("SELECT COUNT(*) FROM {$tRegs} WHERE event_id = :eid AND is_confirmed = 1 AND is_waitlist = 0", ['eid' => $eid]);
+            $ev['waitlist_regs'] = (int)Database::fetchScalar("SELECT COUNT(*) FROM {$tRegs} WHERE event_id = :eid AND is_confirmed = 1 AND is_waitlist = 1", ['eid' => $eid]);
+            $ev['unpaid_regs'] = (int)Database::fetchScalar("SELECT COUNT(*) FROM {$tRegs} WHERE event_id = :eid AND is_confirmed = 1 AND is_waitlist = 0 AND is_fully_paid = 0", ['eid' => $eid]);
         }
         unset($ev);
 
@@ -45,7 +46,7 @@ class EventAdminController
                                 <th>Datum</th>
                                 <th>Status & Startseite</th>
                                 <th>Anmeldungen (Bestätigt / Offen)</th>
-                                <th>Freie Plätze</th>
+                                <th>Verfügbare Plätze</th>
                                 <th>Aktionen</th>
                             </tr>
                         </thead>
@@ -72,19 +73,29 @@ class EventAdminController
                                         <?php if ((int)$ev['show_on_index'] === 1): ?>
                                             <span class="badge badge-blue">Auf Startseite</span>
                                         <?php endif; ?>
+                                        <?php if ($ev['waitlist_regs'] > 0): ?>
+                                            <span class="badge badge-orange">Warteliste (<?= $ev['waitlist_regs'] ?>)</span>
+                                        <?php endif; ?>
                                     </td>
                                     <td>
                                         <strong><?= $ev['confirmed_regs'] ?></strong> bestätigt
+                                        <?php if ($ev['waitlist_regs'] > 0): ?>
+                                            <span style="color:#c2410c;font-weight:600;">(+ <?= $ev['waitlist_regs'] ?> Warteliste)</span>
+                                        <?php endif; ?>
                                         <span style="color:#64748b;">(gesamt: <?= $ev['total_regs'] ?>)</span>
                                         <?php if ($ev['unpaid_regs'] > 0): ?>
                                             <div style="font-size:0.8rem;color:#b45309;"><?= $ev['unpaid_regs'] ?> Zahlung(en) offen</div>
                                         <?php endif; ?>
                                     </td>
                                     <td>
-                                        <?php foreach ($ev['groups'] as $g): ?>
+                                        <?php foreach ($ev['groups'] as $g):
+                                            if ((int)($g['show_in_registration'] ?? 1) === 0 && (int)$g['total_count'] === 0) continue;
+                                        ?>
                                             <div style="font-size:0.82rem;">
                                                 <?= e($g['name_de']) ?>:
-                                                <?php if ($g['calculated_free'] !== null): ?>
+                                                <?php if ((int)($g['show_in_registration'] ?? 1) === 0): ?>
+                                                    <em><?= (int)$g['total_count'] ?> (intern)</em>
+                                                <?php elseif ($g['calculated_free'] !== null): ?>
                                                     <strong><?= (int)$g['calculated_free'] ?></strong> frei
                                                     <?= $g['is_overridden'] ? '(manuell)' : '' ?>
                                                 <?php else: ?>
@@ -94,10 +105,11 @@ class EventAdminController
                                         <?php endforeach; ?>
                                     </td>
                                     <td style="white-space:nowrap;">
-                                        <a href="admin.php?module=registrations&event_id=<?= $eid ?>" class="btn btn-primary btn-sm">👥 Teilnehmer</a>
-                                        <a href="admin.php?module=lists&event_id=<?= $eid ?>" class="btn btn-secondary btn-sm">📋 Listen</a>
+                                        <a href="admin.php?module=registrations&event_id=<?= $eid ?>" class="btn btn-primary btn-sm">Anmeldeverwaltung</a>
+                                        <a href="admin.php?module=lists&event_id=<?= $eid ?>" class="btn btn-secondary btn-sm">Listen</a>
+                                        <a href="admin.php?module=groups&event_id=<?= $eid ?>" class="btn btn-secondary btn-sm">Verfügbare Plätze</a>
                                         <?php if (Auth::isAdmin()): ?>
-                                            <a href="admin.php?module=events&action=edit&id=<?= $eid ?>" class="btn btn-secondary btn-sm">⚙️ Bearbeiten</a>
+                                            <a href="admin.php?module=events&action=edit&id=<?= $eid ?>" class="btn btn-secondary btn-sm">Con-Einstellungen</a>
                                         <?php endif; ?>
                                     </td>
                                 </tr>
@@ -140,6 +152,10 @@ class EventAdminController
                 Database::query("DELETE FROM {$tViews} WHERE event_id = :eid", ['eid' => $id]);
                 Database::query("DELETE FROM {$tEvents} WHERE id = :eid", ['eid' => $id]);
 
+                if ((int)($_SESSION['active_event_id'] ?? 0) === $id) {
+                    unset($_SESSION['active_event_id']);
+                }
+
                 $_SESSION['flash_success'] = 'Die Veranstaltung und alle zugehörigen Daten wurden gelöscht.';
                 header('Location: admin.php');
                 exit;
@@ -168,6 +184,7 @@ class EventAdminController
             $locSuffix       = trim((string)($_POST['location_suffix'] ?? ''));
             $mapsUrl         = trim((string)($_POST['maps_url'] ?? ''));
             $status          = ($_POST['status'] ?? 'open') === 'locked' ? 'locked' : 'open';
+            $waitlistEnabled = isset($_POST['waitlist_enabled']) ? 1 : 0;
             $unlockPassword  = trim((string)($_POST['unlock_password'] ?? ''));
             $isBilingual     = isset($_POST['is_bilingual']) ? 1 : 0;
             $theme           = trim((string)($_POST['theme'] ?? ''));
@@ -183,9 +200,9 @@ class EventAdminController
                 $check = UploadValidator::validateAndStoreImage(
                     $_FILES['header_logo'],
                     'event_logo',
-                    2097152, // max. 2 MB
-                    2500,    // max. 2500 px Breite
-                    800,     // max. 800 px Höhe
+                    2097152,
+                    2500,
+                    800,
                     ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg']
                 );
                 if ($check['ok']) {
@@ -212,6 +229,7 @@ class EventAdminController
                 'lsuf'      => $locSuffix,
                 'maps'      => $mapsUrl,
                 'status'    => $status,
+                'waitlist'  => $waitlistEnabled,
                 'unlock'    => $unlockPassword,
                 'biling'    => $isBilingual,
                 'theme'     => $theme !== '' ? $theme : null,
@@ -226,13 +244,12 @@ class EventAdminController
             if ($isNew) {
                 Database::query(
                     "INSERT INTO {$tEvents}
-                     (title, subtitle, start_date, end_date, countdown_target, show_on_index, show_countdown, location_prefix, location, location_suffix, maps_url, status, unlock_password, is_bilingual, theme, header_logo_path, header_text_de, header_text_en, flyer_url, forum_url, admin_email)
-                     VALUES (:title, :subtitle, :sdate, :edate, :cdtarget, :sindex, :scd, :lpre, :loc, :lsuf, :maps, :status, :unlock, :biling, :theme, :hlogo, :htext_de, :htext_en, :flyer, :forum, :aemail)",
+                     (title, subtitle, start_date, end_date, countdown_target, show_on_index, show_countdown, location_prefix, location, location_suffix, maps_url, status, waitlist_enabled, unlock_password, is_bilingual, theme, header_logo_path, header_text_de, header_text_en, flyer_url, forum_url, admin_email)
+                     VALUES (:title, :subtitle, :sdate, :edate, :cdtarget, :sindex, :scd, :lpre, :loc, :lsuf, :maps, :status, :waitlist, :unlock, :biling, :theme, :hlogo, :htext_de, :htext_en, :flyer, :forum, :aemail)",
                     $params
                 );
                 $newId = Database::lastInsertId();
 
-                // Felder, Teilnehmergruppen & Listen von Vorlage oder vorheriger Veranstaltung übernehmen
                 $cloneFrom = (int)($_POST['clone_from_event_id'] ?? 0);
                 EventRepository::cloneStructure($cloneFrom > 0 ? $cloneFrom : null, $newId);
 
@@ -246,7 +263,7 @@ class EventAdminController
                      title = :title, subtitle = :subtitle, start_date = :sdate, end_date = :edate,
                      countdown_target = :cdtarget, show_on_index = :sindex, show_countdown = :scd,
                      location_prefix = :lpre, location = :loc, location_suffix = :lsuf, maps_url = :maps,
-                     status = :status, unlock_password = :unlock, is_bilingual = :biling,
+                     status = :status, waitlist_enabled = :waitlist, unlock_password = :unlock, is_bilingual = :biling,
                      theme = :theme, header_logo_path = :hlogo, header_text_de = :htext_de, header_text_en = :htext_en,
                      flyer_url = :flyer, forum_url = :forum, admin_email = :aemail
                      WHERE id = :id",
@@ -275,6 +292,7 @@ class EventAdminController
             'location_suffix'  => '',
             'maps_url'         => '',
             'status'           => 'open',
+            'waitlist_enabled' => 1,
             'unlock_password'  => bin2hex(random_bytes(4)),
             'is_bilingual'     => 0,
             'theme'            => '',
@@ -293,9 +311,6 @@ class EventAdminController
         $secretUrl = $regUrl . '&unlock=' . urlencode((string)$ev['unlock_password']);
 
         ob_start();
-        if (!$isNew) {
-            echo AdminLayout::renderEventSubnav($ev, 'events');
-        }
         ?>
         <form method="post" action="admin.php?module=events&action=<?= $isNew ? 'new' : 'edit&id=' . $id ?>" enctype="multipart/form-data">
             <?= Auth::csrfField() ?>
@@ -305,16 +320,16 @@ class EventAdminController
                     <div class="card-header"><h2>🔁 Einstellungen, Felder & Listen übernehmen</h2></div>
                     <div class="card-body">
                         <div class="form-group" style="margin-bottom:0;">
-                            <label for="clone_from_event_id">Vorlage für Teilnehmergruppen, Formularfelder und Auswertungslisten</label>
+                            <label for="clone_from_event_id">Vorlage für Teilnehmergruppen, Abfragefelder und Auswertungslisten</label>
                             <select id="clone_from_event_id" name="clone_from_event_id">
-                                <option value="0">📐 Aus globaler Standard-Vorlage starten (SC, NSC, Team + Standardfelder)</option>
+                                <option value="0">📐 Aus globaler Standard-Vorlage starten (SC, NSC, Team, Absagen + Standardfelder)</option>
                                 <?php foreach ($allEvents as $other): ?>
                                     <option value="<?= (int)$other['id'] ?>">
                                         📋 Komplett übernehmen von <?= e($other['title']) ?> (<?= e(format_date($other['start_date'])) ?>)
                                     </option>
                                 <?php endforeach; ?>
                             </select>
-                            <div class="help-text">Alle Formularfelder, Teilnehmergruppen und gespeicherten Listen der gewählten Veranstaltung werden automatisch in die neue Veranstaltung kopiert.</div>
+                            <div class="help-text">Alle Abfragefelder, Teilnehmergruppen und gespeicherten Listen der gewählten Veranstaltung werden automatisch in die neue Veranstaltung kopiert.</div>
                         </div>
                     </div>
                 </div>
@@ -336,6 +351,7 @@ class EventAdminController
                                     <input type="text" id="input_secret_reg_url" readonly value="<?= e($secretUrl) ?>" onclick="this.select()">
                                     <button type="button" class="copy-icon-btn" onclick="copyInputToClipboard('input_secret_reg_url', this)" title="In die Zwischenablage kopieren">📋</button>
                                 </div>
+                                <div class="help-text">Hinweis: Eine Anmeldung über den Geheim-Link überspringt auch die Warteliste und bucht direkt regulär ein.</div>
                             </div>
                         </div>
                     </div>
@@ -343,7 +359,7 @@ class EventAdminController
             <?php endif; ?>
 
             <div class="card">
-                <div class="card-header"><h2>1. Basisdaten & Zeitraum</h2></div>
+                <div class="card-header"><h2>Basisdaten & Zeitraum</h2></div>
                 <div class="card-body">
                     <div class="grid-2">
                         <div class="form-group">
@@ -389,7 +405,7 @@ class EventAdminController
             </div>
 
             <div class="card">
-                <div class="card-header"><h2>2. Freischaltung, Startseite & Zweisprachigkeit</h2></div>
+                <div class="card-header"><h2>Freischaltung, Warteliste, Startseite & Zweisprachigkeit</h2></div>
                 <div class="card-body">
                     <div class="grid-3">
                         <div class="form-group">
@@ -398,7 +414,7 @@ class EventAdminController
                                 <option value="open" <?= $ev['status'] === 'open' ? 'selected' : '' ?>>🟢 Anmeldung geöffnet</option>
                                 <option value="locked" <?= $ev['status'] === 'locked' ? 'selected' : '' ?>>🔴 Anmeldung gesperrt (nur mit Geheimlink)</option>
                             </select>
-                            <div class="help-text">Einzelne Gruppen (z. B. SC voll) kannst du unter „Teilnehmergruppen“ sperren.</div>
+                            <div class="help-text">Einzelne Gruppen (z. B. SC voll) kannst du unter „Verfügbare Plätze“ sperren.</div>
                         </div>
                         <div class="form-group">
                             <label for="unlock_password">Geheimlink-Entsperrungspasswort</label>
@@ -410,22 +426,25 @@ class EventAdminController
                         </div>
                     </div>
 
-                    <div class="grid-3" style="margin-top:0.5rem;">
+                    <div class="grid-2" style="margin-top:0.5rem;">
                         <div class="form-group">
                             <label>
                                 <input type="checkbox" name="show_on_index" value="1" <?= (int)$ev['show_on_index'] === 1 ? 'checked' : '' ?>>
                                 Auf der öffentlichen Startseite anzeigen
                             </label>
+                            <label style="margin-top:0.65rem;">
+                                <input type="checkbox" name="waitlist_enabled" value="1" <?= (int)($ev['waitlist_enabled'] ?? 1) === 1 ? 'checked' : '' ?>>
+                                📋 Wartelisten-Anmeldung bei ausgebuchten Teilnehmergruppen ermöglichen
+                            </label>
+                            <div class="help-text">Wenn aktiv, können sich Teilnehmer für ausgebuchte Gruppen auf die Warteliste anmelden (Reihenfolge nach E-Mail-Bestätigung).</div>
                         </div>
                         <div class="form-group">
                             <label>
                                 <input type="checkbox" name="is_bilingual" value="1" <?= (int)$ev['is_bilingual'] === 1 ? 'checked' : '' ?>>
                                 🌐 Zweisprachige Anmeldung (Deutsch & Englisch)
                             </label>
-                            <div class="help-text">Aktiviert den Sprachumschalter und die Pflichtprüfung in der Übersetzungstabelle.</div>
-                        </div>
-                        <div class="form-group">
-                            <label>
+                            <div class="help-text">Aktiviert den Sprachumschalter und blendet links im Menü die „Übersetzungstabelle“ ein.</div>
+                            <label style="margin-top:0.65rem;">
                                 <input type="checkbox" name="show_countdown" value="1" <?= (int)$ev['show_countdown'] === 1 ? 'checked' : '' ?>>
                                 ⏳ Countdown auf Startseite anzeigen
                             </label>
@@ -447,7 +466,7 @@ class EventAdminController
             </div>
 
             <div class="card">
-                <div class="card-header"><h2>3. Design, Theme & Veranstaltungs-Header über der Anmeldung</h2></div>
+                <div class="card-header"><h2>Design, Theme & Veranstaltungs-Header über der Anmeldung</h2></div>
                 <div class="card-body">
                     <div class="grid-2">
                         <div class="form-group">
@@ -515,17 +534,20 @@ class EventAdminController
             </div>
         <?php endif; ?>
         <?php
-        AdminLayout::render($isNew ? 'Neue Veranstaltung anlegen' : 'Veranstaltung bearbeiten – ' . $ev['title'], 'events', (string)ob_get_clean(), $isNew ? null : $id);
+        AdminLayout::render($isNew ? 'Neue Veranstaltung anlegen' : 'Con-Einstellungen – ' . $ev['title'], 'events', (string)ob_get_clean(), $isNew ? null : $id);
     }
 
+    /**
+     * Seite "Verfügbare Plätze" (Teilnehmergruppen & Kontingente) – freigegeben für Admin UND SL!
+     */
     public static function handleGroups(): void
     {
-        if (!Auth::isAdmin()) {
+        if (!Auth::isOrga()) {
             header('Location: admin.php');
             exit;
         }
 
-        $eventId = (int)($_REQUEST['event_id'] ?? 0);
+        $eventId = (int)($_REQUEST['event_id'] ?? ($_SESSION['active_event_id'] ?? 0));
         $event   = $eventId > 0 ? EventRepository::find($eventId) : null;
         if (!$event) {
             header('Location: admin.php');
@@ -547,7 +569,7 @@ class EventAdminController
                     Database::query(
                         "UPDATE {$tGroups} SET
                          name_de = :nde, name_en = :nen, max_seats = :max,
-                         manual_free_override = :ovr, is_locked = :lck, show_on_index = :sidx, sort_order = :sort
+                         manual_free_override = :ovr, is_locked = :lck, show_on_index = :sidx, show_in_registration = :sreg, sort_order = :sort
                          WHERE id = :id AND event_id = :eid",
                         [
                             'nde'  => trim((string)($gData['name_de'] ?? 'Gruppe')),
@@ -556,25 +578,27 @@ class EventAdminController
                             'ovr'  => $overrideVal,
                             'lck'  => isset($gData['is_locked']) ? 1 : 0,
                             'sidx' => isset($gData['show_on_index']) ? 1 : 0,
+                            'sreg' => isset($gData['show_in_registration']) ? 1 : 0,
                             'sort' => (int)($gData['sort_order'] ?? 10),
                             'id'   => $gid,
                             'eid'  => $eventId,
                         ]
                     );
                 }
-                $_SESSION['flash_success'] = 'Teilnehmergruppen und Platzkontingente wurden aktualisiert.';
+                $_SESSION['flash_success'] = 'Teilnehmergruppen und verfügbare Plätze wurden aktualisiert.';
             } elseif ($subAction === 'add_group') {
                 $nameDe = trim((string)($_POST['new_name_de'] ?? ''));
                 if ($nameDe !== '') {
                     Database::query(
-                        "INSERT INTO {$tGroups} (event_id, name_de, name_en, max_seats, show_on_index, sort_order)
-                         VALUES (:eid, :nde, :nen, :max, :sidx, :sort)",
+                        "INSERT INTO {$tGroups} (event_id, name_de, name_en, max_seats, show_on_index, show_in_registration, sort_order)
+                         VALUES (:eid, :nde, :nen, :max, :sidx, :sreg, :sort)",
                         [
                             'eid'  => $eventId,
                             'nde'  => $nameDe,
                             'nen'  => trim((string)($_POST['new_name_en'] ?? '')),
                             'max'  => max(0, (int)($_POST['new_max_seats'] ?? 0)),
                             'sidx' => isset($_POST['new_show_on_index']) ? 1 : 0,
+                            'sreg' => isset($_POST['new_show_in_registration']) ? 1 : 0,
                             'sort' => (int)($_POST['new_sort_order'] ?? 40),
                         ]
                     );
@@ -593,16 +617,15 @@ class EventAdminController
         $groups = EventRepository::getGroupsWithSeats($eventId);
 
         ob_start();
-        echo AdminLayout::renderEventSubnav($event, 'groups');
         ?>
         <div class="card">
             <div class="card-header">
-                <h2>🎟️ Teilnehmergruppen & automatische Platzberechnung</h2>
+                <h2>Verfügbare Plätze & Teilnehmergruppen</h2>
             </div>
             <div class="card-body">
                 <p style="margin-top:0;color:#475569;font-size:0.9rem;">
-                    Die freien Plätze auf der Startseite und im Anmeldeformular werden automatisch aus <strong>Max. Plätze minus bestätigte Anmeldungen</strong> berechnet (bei <code>0</code> = unbegrenzt).
-                    Falls du den angezeigten Stand manuell überschreiben möchtest, trage eine Zahl in <strong>„Manueller Override“</strong> ein (leer lassen für Automatik).
+                    Die freien Plätze auf der Startseite und im Anmeldeformular werden automatisch aus <strong>Max. Plätze minus bestätigte reguläre Anmeldungen</strong> berechnet (bei <code>0</code> = unbegrenzt).
+                    Über die Checkbox <strong>„In Anmeldung anzeigen“</strong> legst du fest, ob Teilnehmer diese Gruppe im Formular wählen können (deaktiviert für rein interne Gruppen wie <em>„Absagen“</em>).
                 </p>
 
                 <form method="post" action="admin.php?module=groups&event_id=<?= $eventId ?>">
@@ -612,25 +635,27 @@ class EventAdminController
                         <table class="data-table">
                             <thead>
                                 <tr>
-                                    <th>Sort.</th>
+                                    <th style="width:105px;">Sort.</th>
                                     <th>Bezeichnung (DE)*</th>
                                     <th>Bezeichnung (EN)</th>
                                     <th>Max. Plätze (0 = unbegrenzt)</th>
                                     <th>Bestätigte Anm.</th>
-                                    <th>Manueller Override (Freie Plätze)</th>
+                                    <th>Manueller Override</th>
                                     <th>Aktuell angezeigt</th>
-                                    <th>Auf Startseite</th>
-                                    <th>Gruppe voll / gesperrt</th>
+                                    <th style="text-align:center;">In Anmeldung anzeigen</th>
+                                    <th style="text-align:center;">Auf Startseite</th>
+                                    <th style="text-align:center;">Gruppe voll / gesperrt</th>
                                     <th>Löschen</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <?php foreach ($groups as $g):
                                     $gid = (int)$g['id'];
+                                    $inReg = (int)($g['show_in_registration'] ?? 1) === 1;
                                 ?>
                                     <tr>
-                                        <td style="width:70px;">
-                                            <input type="number" name="groups[<?= $gid ?>][sort_order]" value="<?= (int)$g['sort_order'] ?>">
+                                        <td>
+                                            <input type="number" class="sort-input" name="groups[<?= $gid ?>][sort_order]" value="<?= (int)$g['sort_order'] ?>">
                                         </td>
                                         <td>
                                             <input type="text" name="groups[<?= $gid ?>][name_de]" value="<?= e($g['name_de']) ?>" required>
@@ -642,19 +667,28 @@ class EventAdminController
                                             <input type="number" min="0" name="groups[<?= $gid ?>][max_seats]" value="<?= (int)$g['max_seats'] ?>">
                                         </td>
                                         <td>
-                                            <strong><?= (int)$g['confirmed_count'] ?></strong> <span style="color:#64748b;">(ges. <?= (int)$g['total_count'] ?>)</span>
+                                            <strong><?= (int)$g['confirmed_count'] ?></strong>
+                                            <?php if ((int)($g['waitlist_count'] ?? 0) > 0): ?>
+                                                <span class="badge badge-orange">+<?= (int)$g['waitlist_count'] ?> WL</span>
+                                            <?php endif; ?>
+                                            <span style="color:#64748b;">(ges. <?= (int)$g['total_count'] ?>)</span>
                                         </td>
-                                        <td style="width:140px;">
+                                        <td style="width:130px;">
                                             <input type="number" min="0" name="groups[<?= $gid ?>][manual_free_override]" value="<?= $g['manual_free_override'] !== null ? (int)$g['manual_free_override'] : '' ?>" placeholder="Automatik">
                                         </td>
                                         <td>
-                                            <?php if ($g['is_full']): ?>
+                                            <?php if (!$inReg): ?>
+                                                <span class="badge badge-gray">Intern (nicht im Formular)</span>
+                                            <?php elseif ($g['is_full']): ?>
                                                 <span class="badge badge-red">Ausgebucht</span>
                                             <?php elseif ($g['calculated_free'] !== null): ?>
                                                 <span class="badge badge-green"><?= (int)$g['calculated_free'] ?> frei <?= $g['is_overridden'] ? '(Override)' : '(Auto)' ?></span>
                                             <?php else: ?>
                                                 <span class="badge badge-gray">Unbegrenzt</span>
                                             <?php endif; ?>
+                                        </td>
+                                        <td style="text-align:center;">
+                                            <input type="checkbox" name="groups[<?= $gid ?>][show_in_registration]" value="1" <?= $inReg ? 'checked' : '' ?>>
                                         </td>
                                         <td style="text-align:center;">
                                             <input type="checkbox" name="groups[<?= $gid ?>][show_on_index]" value="1" <?= (int)$g['show_on_index'] === 1 ? 'checked' : '' ?>>
@@ -691,20 +725,25 @@ class EventAdminController
                     <div class="grid-3">
                         <div class="form-group">
                             <label>Bezeichnung (Deutsch)*</label>
-                            <input type="text" name="new_name_de" placeholder="z. B. Tagesgast / Kinder / Küche" required>
+                            <input type="text" name="new_name_de" placeholder="z. B. Tagesgast / Absagen / Küche" required>
                         </div>
                         <div class="form-group">
                             <label>Bezeichnung (Englisch)</label>
-                            <input type="text" name="new_name_en" placeholder="e.g. Day Guest / Youth">
+                            <input type="text" name="new_name_en" placeholder="e.g. Day Guest / Cancellations">
                         </div>
                         <div class="form-group">
                             <label>Max. Plätze (0 = unbegrenzt)</label>
                             <input type="number" min="0" name="new_max_seats" value="0">
                         </div>
                     </div>
-                    <label style="font-weight:400;margin-bottom:1rem;">
-                        <input type="checkbox" name="new_show_on_index" value="1" checked> Freie Plätze dieser Gruppe auf der Startseite anzeigen
-                    </label>
+                    <div style="display:flex;flex-wrap:wrap;gap:1.5rem;margin-bottom:1rem;">
+                        <label style="font-weight:400;margin:0;">
+                            <input type="checkbox" name="new_show_in_registration" value="1" checked> Gruppe in Anmeldung anzeigen (deaktivieren für rein interne Gruppen wie „Absagen“)
+                        </label>
+                        <label style="font-weight:400;margin:0;">
+                            <input type="checkbox" name="new_show_on_index" value="1" checked> Freie Plätze dieser Gruppe auf der Startseite anzeigen
+                        </label>
+                    </div>
                     <div>
                         <button type="submit" class="btn btn-secondary">➕ Gruppe anlegen</button>
                     </div>
@@ -712,6 +751,6 @@ class EventAdminController
             </div>
         </div>
         <?php
-        AdminLayout::render('Teilnehmergruppen & Kontingente – ' . $event['title'], 'groups', (string)ob_get_clean(), $eventId);
+        AdminLayout::render('Verfügbare Plätze – ' . $event['title'], 'groups', (string)ob_get_clean(), $eventId);
     }
 }

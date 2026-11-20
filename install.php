@@ -124,6 +124,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $allChecksOk) {
                     `location_suffix` VARCHAR(150) NOT NULL DEFAULT '',
                     `maps_url` VARCHAR(500) NOT NULL DEFAULT '',
                     `status` ENUM('open', 'locked') NOT NULL DEFAULT 'open',
+                    `waitlist_enabled` TINYINT(1) NOT NULL DEFAULT 1,
                     `unlock_password` VARCHAR(100) NOT NULL DEFAULT '',
                     `is_bilingual` TINYINT(1) NOT NULL DEFAULT 0,
                     `theme` VARCHAR(80) NULL DEFAULT NULL,
@@ -145,6 +146,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $allChecksOk) {
                     `manual_free_override` INT NULL DEFAULT NULL,
                     `is_locked` TINYINT(1) NOT NULL DEFAULT 0,
                     `show_on_index` TINYINT(1) NOT NULL DEFAULT 1,
+                    `show_in_registration` TINYINT(1) NOT NULL DEFAULT 1,
                     `sort_order` INT NOT NULL DEFAULT 10,
                     INDEX `idx_event_groups_event` (`event_id`)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
@@ -179,11 +181,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $allChecksOk) {
                     `birth_date` DATE NULL DEFAULT NULL,
                     `doi_token` VARCHAR(80) NOT NULL DEFAULT '',
                     `is_confirmed` TINYINT(1) NOT NULL DEFAULT 0,
+                    `is_waitlist` TINYINT(1) NOT NULL DEFAULT 0,
+                    `waitlist_confirmed` TINYINT(1) NOT NULL DEFAULT 0,
+                    `is_secret_unlock` TINYINT(1) NOT NULL DEFAULT 0,
                     `is_orga_confirmed` TINYINT(1) NOT NULL DEFAULT 0,
                     `amount_paid` DECIMAL(10,2) NOT NULL DEFAULT 0.00,
                     `is_fully_paid` TINYINT(1) NOT NULL DEFAULT 0,
                     `language` VARCHAR(5) NOT NULL DEFAULT 'de',
                     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    `confirmed_at` DATETIME NULL DEFAULT NULL,
+                    `history_log` TEXT NULL DEFAULT NULL,
                     INDEX `idx_reg_event` (`event_id`),
                     INDEX `idx_reg_email_hash` (`email_hash`)
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;",
@@ -249,6 +256,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $allChecksOk) {
                 'mail_tpl_doi_subject_en' => 'Please confirm your registration for {conname}',
                 'mail_tpl_doi_body_en'    => "<p>Hello {vorname} {nachname},</p><p>thank you for registering for <b>{conname}</b> ({condatum}) as <b>{gruppe}</b>.</p><p>To complete your registration, please click the confirmation link below:</p><p><a href=\"{link}\">{link}</a></p><p>Best regards<br>The Organizers</p>",
 
+                'mail_tpl_waitlist_subject_de' => 'Dein Wartelistenplatz für {conname}',
+                'mail_tpl_waitlist_body_de'    => "<p>Hallo {vorname} {nachname},</p><p>wir bestätigen den Eingang deiner Anmeldung für <b>{conname}</b> ({condatum}) in der Gruppe <b>{gruppe}</b>.</p><p>Da diese Teilnehmergruppe zum Zeitpunkt deiner E-Mail-Bestätigung bereits ausgebucht war, stehst du aktuell auf der <b>Warteliste auf Platz {wartelistenplatz}</b>.</p><p>Bitte überweise noch keinen Teilnahmebeitrag. Sobald ein Platz für dich frei wird, melden wir uns umgehend bei dir!</p><p>Viele Grüße<br>Deine Orga</p>",
+                'mail_tpl_waitlist_subject_en' => 'Your Waiting List Spot for {conname}',
+                'mail_tpl_waitlist_body_en'    => "<p>Hello {vorname} {nachname},</p><p>we confirm receipt of your registration for <b>{conname}</b> ({condatum}) in the group <b>{gruppe}</b>.</p><p>Since this participant group was already fully booked at the time of your email confirmation, you are currently on the <b>waiting list at position #{wartelistenplatz}</b>.</p><p>Please do not transfer any participation fee yet. As soon as a spot becomes available for you, we will contact you!</p><p>Best regards<br>The Organizers</p>",
+
                 'mail_tpl_confirm_subject_de' => 'Anmeldebestätigung für {conname}',
                 'mail_tpl_confirm_body_de'    => "<p>Hallo {vorname} {nachname},</p><p>deine Anmeldung für <b>{conname}</b> ({condatum}) als <b>{gruppe}</b> wurde von der Orga geprüft und bestätigt.</p><p>Bitte überweise deinen Teilnahmebeitrag unter Angabe von „{conname} – {vorname} {nachname}“.</p><p>Viele Grüße<br>Deine Orga</p>",
                 'mail_tpl_confirm_subject_en' => 'Registration Confirmed for {conname}',
@@ -277,13 +289,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $allChecksOk) {
                 'name'  => trim($form['admin_name']),
             ]);
 
-            // Globale Standard-Teilnehmergruppen (event_id = NULL) anlegen: SC, NSC, Team
+            // Globale Standard-Teilnehmergruppen (event_id = NULL) anlegen: SC, NSC, Team + interne Gruppe Absagen
             $defaultGroups = [
-                ['SC (Spielercharakter)', 'PC (Player Character)', 60, 1, 10],
-                ['NSC (Nichtspielercharakter)', 'NPC (Non-Player Character)', 30, 1, 20],
-                ['Team / Orga / Helfer', 'Staff / Crew', 0, 0, 30],
+                ['SC (Spielercharakter)', 'PC (Player Character)', 60, 1, 1, 10],
+                ['NSC (Nichtspielercharakter)', 'NPC (Non-Player Character)', 30, 1, 1, 20],
+                ['Team / Orga / Helfer', 'Staff / Crew', 0, 0, 1, 30],
+                ['Absagen', 'Cancellations', 0, 0, 0, 90],
             ];
-            $stmtGroup = $pdo->prepare("INSERT INTO `{$prefix}event_groups` (event_id, name_de, name_en, max_seats, show_on_index, sort_order) VALUES (NULL, ?, ?, ?, ?, ?)");
+            $stmtGroup = $pdo->prepare("INSERT INTO `{$prefix}event_groups` (event_id, name_de, name_en, max_seats, show_on_index, show_in_registration, sort_order) VALUES (NULL, ?, ?, ?, ?, ?, ?)");
             foreach ($defaultGroups as $g) {
                 $stmtGroup->execute($g);
             }
@@ -549,7 +562,7 @@ $themes = Theme::availableThemes();
                 </div>
             <?php endif; ?>
 
-            <h2>1. Systemvoraussetzungen</h2>
+            <h2>Systemvoraussetzungen</h2>
             <ul class="check-list">
                 <?php foreach ($checks as $c): ?>
                     <li>
@@ -567,7 +580,7 @@ $themes = Theme::availableThemes();
                 <form method="post" action="install.php">
                     <?= Auth::csrfField() ?>
 
-                    <h2>2. MySQL / MariaDB Datenbank</h2>
+                    <h2>MySQL / MariaDB Datenbank</h2>
                     <div class="grid-2">
                         <div class="form-group">
                             <label for="db_host">Datenbank-Host</label>
@@ -599,7 +612,7 @@ $themes = Theme::availableThemes();
                         </div>
                     </div>
 
-                    <h2>3. Grundeinstellungen & Design</h2>
+                    <h2>Grundeinstellungen & Design</h2>
                     <div class="grid-2">
                         <div class="form-group">
                             <label for="site_title">Name der Webseite / Orga</label>
@@ -627,7 +640,7 @@ $themes = Theme::availableThemes();
                         </div>
                     </div>
 
-                    <h2>4. Erster Administrator-Zugang</h2>
+                    <h2>Erster Administrator-Zugang</h2>
                     <div class="grid-2">
                         <div class="form-group">
                             <label for="admin_name">Name des Administrators</label>

@@ -7,6 +7,7 @@ use App\Core\Auth;
 use App\Core\Database;
 use App\Core\Theme;
 use App\Core\Version;
+use App\Modules\Events\EventRepository;
 
 class AdminLayout
 {
@@ -111,7 +112,7 @@ class AdminLayout
                         <form method="post" action="admin.php?action=verify_2fa">
                             <?= Auth::csrfField() ?>
                             <div class="form-group">
-                                <label for="totp_code">🔐 Zwei-Faktor-Code (6 Ziffern) oder Einmal-Notfallcode</label>
+                                <label for="totp_code">Zwei-Faktor-Code (6 Ziffern) oder Einmal-Notfallcode</label>
                                 <input type="text" id="totp_code" name="totp_code" placeholder="123456 oder XXXX-XXXX" autocomplete="one-time-code" required autofocus style="font-size:1.15rem;letter-spacing:0.12em;text-align:center;">
                             </div>
                             <button type="submit" class="btn">Code bestätigen & Anmelden</button>
@@ -146,6 +147,21 @@ class AdminLayout
         $siteTitle  = (string)Database::getSetting('site_title', 'Con-Management');
         $faviconUrl = (string)Database::getSetting('site_favicon', '');
         $palette    = Theme::getAdminPalette();
+
+        // Dauerhaft ausgewählte Veranstaltung aus Parameter oder Session ermitteln
+        if ($activeEventId !== null && $activeEventId > 0) {
+            $_SESSION['active_event_id'] = $activeEventId;
+        }
+        $sessionEventId = (int)($_SESSION['active_event_id'] ?? 0);
+        $activeEvent    = $sessionEventId > 0 ? EventRepository::find($sessionEventId) : null;
+        if (!$activeEvent) {
+            unset($_SESSION['active_event_id']);
+            $sessionEventId = 0;
+        }
+
+        // Unterscheiden, ob formbuilder für eine Veranstaltung oder global (Feldvorlagen, event_id=0) geöffnet ist
+        $isGlobalFormTemplates = ($activeModule === 'formbuilder' && isset($_GET['event_id']) && (int)$_GET['event_id'] === 0);
+        $isNewEventPage        = ($activeModule === 'events' && ($_GET['action'] ?? '') === 'new');
 
         $flashSuccess = $_SESSION['flash_success'] ?? '';
         $flashError   = $_SESSION['flash_error'] ?? '';
@@ -214,19 +230,25 @@ class AdminLayout
                     color: #ffffff;
                 }
                 .nav-section {
-                    padding: 1rem 1.35rem 0.35rem;
+                    padding: 0.95rem 1.35rem 0.35rem;
                     font-size: 0.74rem;
                     text-transform: uppercase;
                     letter-spacing: 0.06em;
                     color: #94a3b8;
                     font-weight: 700;
+                    word-wrap: break-word;
+                    overflow-wrap: break-word;
+                }
+                .nav-section.active-event-heading {
+                    color: var(--adm-accent-light);
+                    border-top: 1px solid rgba(255, 255, 255, 0.08);
+                    margin-top: 0.35rem;
                 }
                 .side-nav { list-style: none; margin: 0; padding: 0; }
                 .side-nav li a {
                     display: flex;
                     align-items: center;
-                    gap: 0.6rem;
-                    padding: 0.62rem 1.35rem;
+                    padding: 0.58rem 1.35rem;
                     color: #cbd5e1;
                     text-decoration: none;
                     font-weight: 500;
@@ -325,6 +347,10 @@ class AdminLayout
                     border-color: var(--adm-accent);
                     box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.08);
                 }
+                .sort-input {
+                    min-width: 95px;
+                    width: 95px !important;
+                }
                 /* Copy Input Wrapper (1-Klick Kopieren Symbol im Textfeld) */
                 .copy-input-wrap {
                     position: relative;
@@ -381,6 +407,7 @@ class AdminLayout
                 .badge-green { background: #dcfce7; color: #166534; }
                 .badge-red { background: #fee2e2; color: #991b1b; }
                 .badge-amber { background: #fef3c7; color: #92400e; }
+                .badge-orange { background: #ffedd5; color: #c2410c; border: 1px solid #fdba74; }
                 .badge-blue { background: #dbeafe; color: #1e40af; }
                 .badge-gray { background: #f1f5f9; color: #475569; }
                 .alert {
@@ -391,27 +418,6 @@ class AdminLayout
                 }
                 .alert-success { background: #dcfce7; border: 1px solid #86efac; color: #166534; }
                 .alert-danger { background: #fee2e2; border: 1px solid #fca5a5; color: #991b1b; }
-                .subnav-tabs {
-                    display: flex;
-                    flex-wrap: wrap;
-                    gap: 0.4rem;
-                    margin-bottom: 1.35rem;
-                    border-bottom: 2px solid #cbd5e1;
-                    padding-bottom: 0.5rem;
-                }
-                .subnav-tabs a {
-                    padding: 0.45rem 0.95rem;
-                    border-radius: 6px;
-                    text-decoration: none;
-                    font-weight: 600;
-                    font-size: 0.88rem;
-                    color: #334155;
-                    background: #e2e8f0;
-                }
-                .subnav-tabs a.active, .subnav-tabs a:hover {
-                    background: var(--adm-accent);
-                    color: #ffffff;
-                }
                 @media (max-width: 900px) {
                     body { flex-direction: column; }
                     .sidebar { width: 100%; }
@@ -433,40 +439,57 @@ class AdminLayout
                     <?php endif; ?>
                 </div>
 
-                <div class="nav-section">Veranstaltungen & Orga</div>
-                <ul class="side-nav">
-                    <li><a href="admin.php?module=dashboard" class="<?= $activeModule === 'dashboard' ? 'active' : '' ?>">📊 Übersicht / Cons</a></li>
-                    <?php if ($activeEventId): ?>
-                        <li><a href="admin.php?module=registrations&event_id=<?= $activeEventId ?>" class="<?= $activeModule === 'registrations' ? 'active' : '' ?>">👥 Teilnehmerverwaltung</a></li>
-                        <li><a href="admin.php?module=lists&event_id=<?= $activeEventId ?>" class="<?= $activeModule === 'lists' ? 'active' : '' ?>">📋 Listen, Filter & Export</a></li>
-                        <?php if ($isAdmin): ?>
-                            <li><a href="admin.php?module=events&action=edit&id=<?= $activeEventId ?>" class="<?= $activeModule === 'events' ? 'active' : '' ?>">⚙️ Con-Einstellungen & Design</a></li>
-                            <li><a href="admin.php?module=groups&event_id=<?= $activeEventId ?>" class="<?= $activeModule === 'groups' ? 'active' : '' ?>">🎟️ Teilnehmergruppen & Plätze</a></li>
-                            <li><a href="admin.php?module=formbuilder&event_id=<?= $activeEventId ?>" class="<?= $activeModule === 'formbuilder' ? 'active' : '' ?>">🧩 Formular-Baukasten</a></li>
-                            <li><a href="admin.php?module=translations&event_id=<?= $activeEventId ?>" class="<?= $activeModule === 'translations' ? 'active' : '' ?>">🌐 Übersetzungstabelle (DE/EN)</a></li>
-                        <?php endif; ?>
-                    <?php else: ?>
-                        <li><a href="admin.php?module=lists" class="<?= $activeModule === 'lists' ? 'active' : '' ?>">📋 Listen, Filter & Export</a></li>
-                    <?php endif; ?>
-                    <li><a href="admin.php?module=help" class="<?= $activeModule === 'help' ? 'active' : '' ?>">❓ Hilfe & Handbuch</a></li>
+                <!-- 1. Hilfe & Handbuch ganz oben vor der ersten Überschrift -->
+                <ul class="side-nav" style="margin-top:0.5rem;">
+                    <li><a href="admin.php?module=help" class="<?= $activeModule === 'help' ? 'active' : '' ?>">Hilfe & Handbuch</a></li>
                 </ul>
 
-                <?php if ($isAdmin): ?>
-                    <div class="nav-section">Administration & Vorlagen</div>
+                <!-- 2. Veranstaltungen -->
+                <div class="nav-section">Veranstaltungen</div>
+                <ul class="side-nav">
+                    <li><a href="admin.php?module=dashboard" class="<?= $activeModule === 'dashboard' ? 'active' : '' ?>">Übersicht</a></li>
+                </ul>
+
+                <!-- 3. Aktuell ausgewählte Veranstaltung (dauerhaft sichtbar, sobald ausgewählt) -->
+                <?php if ($activeEvent):
+                    $aeId = (int)$activeEvent['id'];
+                    $aeBilingual = (int)$activeEvent['is_bilingual'] === 1;
+                ?>
+                    <div class="nav-section active-event-heading"><?= e($activeEvent['title']) ?></div>
                     <ul class="side-nav">
-                        <li><a href="admin.php?module=events&action=new" class="<?= ($activeModule === 'events' && !$activeEventId) ? 'active' : '' ?>">➕ Neue Veranstaltung</a></li>
-                        <li><a href="admin.php?module=formbuilder&event_id=0" class="<?= ($activeModule === 'formbuilder' && !$activeEventId) ? 'active' : '' ?>">📐 Standard-Feldvorlagen</a></li>
-                        <li><a href="admin.php?module=gdpr" class="<?= $activeModule === 'gdpr' ? 'active' : '' ?>">🛡️ DSGVO-Center & Bereinigung</a></li>
-                        <li><a href="admin.php?module=mailtemplates" class="<?= $activeModule === 'mailtemplates' ? 'active' : '' ?>">✉️ E-Mail-Vorlagen</a></li>
-                        <li><a href="admin.php?module=users" class="<?= $activeModule === 'users' ? 'active' : '' ?>">🔑 Benutzer & Rollen</a></li>
-                        <li><a href="admin.php?module=settings" class="<?= $activeModule === 'settings' ? 'active' : '' ?>">🎨 Globales Design & System</a></li>
-                        <li><a href="admin.php?module=updater" class="<?= $activeModule === 'updater' ? 'active' : '' ?>">🔄 System-Update & Changelog</a></li>
+                        <li><a href="admin.php?module=registrations&event_id=<?= $aeId ?>" class="<?= $activeModule === 'registrations' ? 'active' : '' ?>">Anmeldeverwaltung</a></li>
+                        <li><a href="admin.php?module=lists&event_id=<?= $aeId ?>" class="<?= $activeModule === 'lists' ? 'active' : '' ?>">Listen</a></li>
+                        <?php if ($isAdmin): ?>
+                            <li><a href="admin.php?module=events&action=edit&id=<?= $aeId ?>" class="<?= ($activeModule === 'events' && !$isNewEventPage) ? 'active' : '' ?>">Con-Einstellungen</a></li>
+                        <?php endif; ?>
+                        <li><a href="admin.php?module=groups&event_id=<?= $aeId ?>" class="<?= $activeModule === 'groups' ? 'active' : '' ?>">Verfügbare Plätze</a></li>
+                        <?php if ($isAdmin): ?>
+                            <li><a href="admin.php?module=formbuilder&event_id=<?= $aeId ?>" class="<?= ($activeModule === 'formbuilder' && !$isGlobalFormTemplates) ? 'active' : '' ?>">Abfragefelder</a></li>
+                            <?php if ($aeBilingual): ?>
+                                <li><a href="admin.php?module=translations&event_id=<?= $aeId ?>" class="<?= $activeModule === 'translations' ? 'active' : '' ?>">Übersetzungstabelle</a></li>
+                            <?php endif; ?>
+                        <?php endif; ?>
                     </ul>
                 <?php endif; ?>
 
+                <!-- 4. Administration & Vorlagen -->
+                <?php if ($isAdmin): ?>
+                    <div class="nav-section">Administration & Vorlagen</div>
+                    <ul class="side-nav">
+                        <li><a href="admin.php?module=events&action=new" class="<?= $isNewEventPage ? 'active' : '' ?>">Neue Veranstaltung</a></li>
+                        <li><a href="admin.php?module=formbuilder&event_id=0" class="<?= $isGlobalFormTemplates ? 'active' : '' ?>">Feldvorlagen</a></li>
+                        <li><a href="admin.php?module=gdpr" class="<?= $activeModule === 'gdpr' ? 'active' : '' ?>">DSGVO-Center</a></li>
+                        <li><a href="admin.php?module=mailtemplates" class="<?= $activeModule === 'mailtemplates' ? 'active' : '' ?>">E-Mail-Vorlagen</a></li>
+                        <li><a href="admin.php?module=users" class="<?= $activeModule === 'users' ? 'active' : '' ?>">Benutzer & Rollen</a></li>
+                        <li><a href="admin.php?module=settings" class="<?= $activeModule === 'settings' ? 'active' : '' ?>">Seiteneinstellungen</a></li>
+                        <li><a href="admin.php?module=updater" class="<?= $activeModule === 'updater' ? 'active' : '' ?>">Update & Changelog</a></li>
+                    </ul>
+                <?php endif; ?>
+
+                <!-- 5. Frontend -->
                 <div class="nav-section">Frontend</div>
                 <ul class="side-nav">
-                    <li><a href="index.php" target="_blank">🌍 Öffentliche Startseite &nearr;</a></li>
+                    <li><a href="index.php" target="_blank">Öffentliche Startseite &nearr;</a></li>
                 </ul>
 
                 <div class="sidebar-footer">
@@ -481,13 +504,6 @@ class AdminLayout
             <div class="main-area">
                 <header class="topbar">
                     <h1><?= e($title) ?></h1>
-                    <div>
-                        <?php if ($activeEventId): ?>
-                            <a href="register.php?event_id=<?= $activeEventId ?>" target="_blank" class="btn btn-secondary btn-sm">
-                                🔗 Anmeldeformular öffnen &nearr;
-                            </a>
-                        <?php endif; ?>
-                    </div>
                 </header>
                 <main class="content-wrap">
                     <?php if ($flashSuccess !== ''): ?>
@@ -520,23 +536,12 @@ class AdminLayout
         <?php
     }
 
+    /**
+     * Obere Subnav-Buttons auf den veranstaltungsbezogenen Seiten wurden auf Wunsch entfernt
+     * (Navigation erfolgt übersichtlich links unter dem Veranstaltungsnamen).
+     */
     public static function renderEventSubnav(array $event, string $activeModule): string
     {
-        $eid = (int)$event['id'];
-        $isAdmin = Auth::isAdmin();
-        ob_start();
-        ?>
-        <div class="subnav-tabs">
-            <a href="admin.php?module=registrations&event_id=<?= $eid ?>" class="<?= $activeModule === 'registrations' ? 'active' : '' ?>">👥 Teilnehmer (Anmeldungen)</a>
-            <a href="admin.php?module=lists&event_id=<?= $eid ?>" class="<?= $activeModule === 'lists' ? 'active' : '' ?>">📋 Listen, Filter & Druck</a>
-            <?php if ($isAdmin): ?>
-                <a href="admin.php?module=events&action=edit&id=<?= $eid ?>" class="<?= $activeModule === 'events' ? 'active' : '' ?>">⚙️ Einstellungen, Header & Theme</a>
-                <a href="admin.php?module=groups&event_id=<?= $eid ?>" class="<?= $activeModule === 'groups' ? 'active' : '' ?>">🎟️ Teilnehmergruppen & Plätze</a>
-                <a href="admin.php?module=formbuilder&event_id=<?= $eid ?>" class="<?= $activeModule === 'formbuilder' ? 'active' : '' ?>">🧩 Formular-Baukasten</a>
-                <a href="admin.php?module=translations&event_id=<?= $eid ?>" class="<?= $activeModule === 'translations' ? 'active' : '' ?>">🌐 Übersetzungstabelle (DE/EN)</a>
-            <?php endif; ?>
-        </div>
-        <?php
-        return (string)ob_get_clean();
+        return '';
     }
 }

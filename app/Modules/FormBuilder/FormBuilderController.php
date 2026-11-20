@@ -253,7 +253,7 @@ class FormBuilderController
                                 <option value="none" <?= $ef['system_mapping'] === 'none' ? 'selected' : '' ?>>— Normales freies Feld —</option>
                                 <option value="firstname" <?= $ef['system_mapping'] === 'firstname' ? 'selected' : '' ?>>Vorname des Teilnehmers</option>
                                 <option value="lastname" <?= $ef['system_mapping'] === 'lastname' ? 'selected' : '' ?>>Nachname des Teilnehmers</option>
-                                <option value="email" <?= $ef['system_mapping'] === 'email' ? 'selected' : '' ?>>E-Mail-Adresse (für Double-Opt-In & DSGVO)</option>
+                                <option value="email" <?= $ef['system_mapping'] === 'email' ? 'selected' : '' ?>>E-Mail-Adresse (für E-Mail-Bestätigung & DSGVO)</option>
                                 <option value="birthdate" <?= $ef['system_mapping'] === 'birthdate' ? 'selected' : '' ?>>Geburtsdatum (für U18-Minderjährigen-Liste)</option>
                             </select>
                         </div>
@@ -350,7 +350,7 @@ class FormBuilderController
                         <table class="data-table">
                             <thead>
                                 <tr>
-                                    <th style="width:75px;">Sort.</th>
+                                    <th style="width:105px;">Sort.</th>
                                     <th>Bezeichnung (DE / EN)</th>
                                     <th>Feldtyp</th>
                                     <th style="text-align:center;">Pflichtfeld</th>
@@ -369,7 +369,7 @@ class FormBuilderController
                                 ?>
                                     <tr style="<?= $isHeading ? 'background:#eef7dc;font-weight:700;' : '' ?>">
                                         <td>
-                                            <input type="number" name="q[<?= $fid ?>][sort_order]" value="<?= (int)$f['sort_order'] ?>">
+                                            <input type="number" class="sort-input" name="q[<?= $fid ?>][sort_order]" value="<?= (int)$f['sort_order'] ?>">
                                         </td>
                                         <td>
                                             <div><?= e($f['label_de']) ?></div>
@@ -450,7 +450,7 @@ class FormBuilderController
         enforceOrgaRequiredCollision();
         </script>
         <?php
-        $title = $event ? ('Formular-Baukasten – ' . $event['title']) : 'Globale Standard-Feldvorlagen';
+        $title = $event ? ('Abfragefelder – ' . $event['title']) : 'Feldvorlagen für neue Veranstaltungen';
         AdminLayout::render($title, 'formbuilder', (string)ob_get_clean(), $eventId);
     }
 
@@ -701,14 +701,14 @@ class FormBuilderController
                 </p>
                 <div class="grid-2">
                     <div>
-                        <label>1. Aktuelle Tabelle zum Kopieren</label>
+                        <label>Aktuelle Tabelle zum Kopieren</label>
                         <textarea rows="7" readonly onclick="this.select()" style="font-family:monospace;font-size:0.82rem;"><?= e(implode("\n", $tsvRows)) ?></textarea>
                     </div>
                     <div>
                         <form method="post" action="admin.php?module=translations&event_id=<?= $eventId ?>">
                             <?= Auth::csrfField() ?>
                             <input type="hidden" name="sub_action" value="import_tsv">
-                            <label>2. Übersetzte Tabelle hier einfügen & importieren</label>
+                            <label>Übersetzte Tabelle hier einfügen & importieren</label>
                             <textarea name="tsv_input" rows="5" placeholder="field.1.label&#9;Vorname&#9;First Name" style="font-family:monospace;font-size:0.82rem;" required></textarea>
                             <button type="submit" class="btn btn-secondary btn-sm" style="margin-top:0.5rem;">📥 TSV-Übersetzungen importieren</button>
                         </form>

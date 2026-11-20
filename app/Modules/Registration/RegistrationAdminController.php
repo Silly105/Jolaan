@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace App\Modules\Registration;
 
 use App\Core\Auth;
+use App\Core\Crypto;
 use App\Core\Database;
 use App\Core\Mailer;
 use App\Modules\Admin\AdminLayout;
@@ -13,7 +14,7 @@ class RegistrationAdminController
 {
     public static function handle(): void
     {
-        $eventId = (int)($_REQUEST['event_id'] ?? 0);
+        $eventId = (int)($_REQUEST['event_id'] ?? ($_SESSION['active_event_id'] ?? 0));
         $event   = $eventId > 0 ? EventRepository::find($eventId) : null;
         if (!$event) {
             header('Location: admin.php');
@@ -30,7 +31,6 @@ class RegistrationAdminController
             $subAction = (string)($_POST['sub_action'] ?? '');
 
             if ($subAction === 'quick_payment') {
-                // Schnellspeichern von "Gezahlter Betrag", "Voller Preis bezahlt" & "Orga bestätigt" direkt aus der Liste
                 foreach ($_POST['pay'] ?? [] as $rid => $pData) {
                     $rid = (int)$rid;
                     $amountRaw = str_replace(',', '.', trim((string)($pData['amount_paid'] ?? '0')));
@@ -46,6 +46,48 @@ class RegistrationAdminController
                 $_SESSION['flash_success'] = 'Zahlungsstände und Bestätigungen wurden gespeichert.';
                 header("Location: admin.php?module=registrations&event_id={$eventId}");
                 exit;
+            } elseif ($subAction === 'release_from_waitlist') {
+                // Teilnehmer von der Warteliste auf die reguläre Teilnehmerliste verschieben
+                $regId = (int)($_POST['reg_id'] ?? 0);
+                $reg   = RegistrationRepository::findWithValues($regId);
+                if ($reg && (int)$reg['event_id'] === $eventId) {
+                    Database::query("UPDATE {$tRegs} SET is_waitlist = 0 WHERE id = :id AND event_id = :eid", [
+                        'id'  => $regId,
+                        'eid' => $eventId,
+                    ]);
+                    RegistrationRepository::appendHistoryLog($regId, 'Von der Warteliste freigegeben und auf die reguläre Teilnehmerliste übernommen', true);
+                    $_SESSION['flash_success'] = "{$reg['first_name']} {$reg['last_name']} wurde von der Warteliste auf die reguläre Teilnehmerliste übernommen.";
+                }
+                $redirectBack = ($_POST['return_to'] ?? '') === 'edit'
+                    ? "admin.php?module=registrations&event_id={$eventId}&action=edit&id={$regId}"
+                    : "admin.php?module=registrations&event_id={$eventId}";
+                header("Location: {$redirectBack}");
+                exit;
+            } elseif ($subAction === 'manual_confirm_email') {
+                // Manuelle Freischaltung einer noch unbestätigten Anmeldung (Zeitpunkt entscheidet über Warteliste!)
+                $regId = (int)($_POST['reg_id'] ?? 0);
+                $reg   = RegistrationRepository::findWithValues($regId);
+                if ($reg && (int)$reg['event_id'] === $eventId && (int)$reg['is_confirmed'] === 0) {
+                    $isSecret = (int)($reg['is_secret_unlock'] ?? 0) === 1;
+                    $goWait   = RegistrationRepository::determineWaitlistStatusOnConfirm($eventId, (int)$reg['group_id'], $isSecret);
+                    $now      = date('Y-m-d H:i:s');
+
+                    Database::query(
+                        "UPDATE {$tRegs} SET is_confirmed = 1, is_waitlist = :wait, confirmed_at = :cat WHERE id = :id AND event_id = :eid",
+                        ['wait' => $goWait ? 1 : 0, 'cat' => $now, 'id' => $regId, 'eid' => $eventId]
+                    );
+
+                    if ($goWait) {
+                        $pos = RegistrationRepository::getWaitlistPosition($eventId, (int)$reg['group_id'], $regId);
+                        RegistrationRepository::appendHistoryLog($regId, "Manuell im Backend freigeschaltet – Gruppe ausgebucht, daher auf Warteliste gesetzt (Platz #{$pos})", true);
+                        $_SESSION['flash_success'] = "{$reg['first_name']} {$reg['last_name']} wurde manuell freigeschaltet und auf die Warteliste (Platz #{$pos}) gesetzt.";
+                    } else {
+                        RegistrationRepository::appendHistoryLog($regId, 'Manuell im Backend freigeschaltet (Reguläre Teilnehmerliste)', true);
+                        $_SESSION['flash_success'] = "{$reg['first_name']} {$reg['last_name']} wurde manuell freigeschaltet.";
+                    }
+                }
+                header("Location: admin.php?module=registrations&event_id={$eventId}");
+                exit;
             } elseif ($subAction === 'send_mail') {
                 $regId    = (int)($_POST['reg_id'] ?? 0);
                 $mailType = (string)($_POST['mail_type'] ?? '');
@@ -54,7 +96,7 @@ class RegistrationAdminController
                 if ($reg && (int)$reg['event_id'] === $eventId) {
                     $sent = self::sendSystemMailToParticipant($event, $reg, $mailType);
                     if ($sent) {
-                        $_SESSION['flash_success'] = "E-Mail ({$mailType}) wurde an {$reg['email']} gesendet.";
+                        $_SESSION['flash_success'] = "E-Mail wurde an {$reg['email']} gesendet.";
                     } else {
                         $_SESSION['flash_error'] = "E-Mail an {$reg['email']} konnte nicht gesendet werden.";
                     }
@@ -65,10 +107,10 @@ class RegistrationAdminController
                 header("Location: {$redirectBack}");
                 exit;
             } elseif ($subAction === 'save_person') {
-                // Teilnehmer anlegen (Orga-Direkteintrag) oder bearbeiten
                 $regId      = (int)($_POST['reg_id'] ?? 0);
                 $groupId    = (int)($_POST['group_id'] ?? 0);
                 $isConf     = isset($_POST['is_confirmed']) ? 1 : 0;
+                $isWait     = isset($_POST['is_waitlist']) ? 1 : 0;
                 $isOrgaConf = isset($_POST['is_orga_confirmed']) ? 1 : 0;
                 $amountPaid = round((float)str_replace(',', '.', (string)($_POST['amount_paid'] ?? '0')), 2);
                 $isFullPaid = isset($_POST['is_fully_paid']) ? 1 : 0;
@@ -77,7 +119,6 @@ class RegistrationAdminController
                 $fields = EventRepository::getFields($eventId, true);
                 $submittedVals = $_POST['f'] ?? [];
 
-                // Checkboxen, die nicht angehakt wurden, auf '0' setzen
                 foreach ($fields as $f) {
                     if (in_array($f['field_type'], ['checkbox', 'document'], true)) {
                         $k = $f['field_key'];
@@ -91,13 +132,13 @@ class RegistrationAdminController
                     'email'             => trim((string)($_POST['core_email'] ?? '')),
                     'birth_date'        => trim((string)($_POST['core_birth_date'] ?? '')) ?: null,
                     'is_confirmed'      => $isConf,
+                    'is_waitlist'       => $isWait,
                     'is_orga_confirmed' => $isOrgaConf,
                     'amount_paid'       => $amountPaid,
                     'is_fully_paid'     => $isFullPaid,
                     'language'          => $lang,
                 ];
 
-                // Falls System-Mapping-Felder ausgefüllt wurden, synchron halten
                 foreach ($fields as $f) {
                     $k = $f['field_key'];
                     $v = trim((string)($submittedVals[$k] ?? ''));
@@ -113,13 +154,24 @@ class RegistrationAdminController
                 }
 
                 if ($regId > 0) {
-                    $encCoreEmail  = $coreData['email'] !== '' ? \App\Core\Crypto::encrypt($coreData['email']) : '';
-                    $coreEmailHash = $coreData['email'] !== '' ? \App\Core\Crypto::blindIndex($coreData['email']) : '';
+                    $oldReg = RegistrationRepository::findWithValues($regId);
+                    $encCoreEmail  = $coreData['email'] !== '' ? Crypto::encrypt($coreData['email']) : '';
+                    $coreEmailHash = $coreData['email'] !== '' ? Crypto::blindIndex($coreData['email']) : '';
+
+                    // Wenn jemand hier im Formular erstmalig von is_confirmed = 0 auf 1 geschaltet wird: Zeitpunkt prüfen!
+                    $confirmedAt = $oldReg['confirmed_at'] ?? null;
+                    if ($oldReg && (int)$oldReg['is_confirmed'] === 0 && $isConf === 1) {
+                        $confirmedAt = date('Y-m-d H:i:s');
+                        if (!isset($_POST['is_waitlist'])) {
+                            $autoWait = RegistrationRepository::determineWaitlistStatusOnConfirm($eventId, $groupId, (int)($oldReg['is_secret_unlock'] ?? 0) === 1);
+                            $isWait = $autoWait ? 1 : 0;
+                        }
+                    }
 
                     Database::query(
                         "UPDATE {$tRegs} SET
                          group_id = :gid, email = :email, email_hash = :ehash, first_name = :fname, last_name = :lname, birth_date = :bdate,
-                         is_confirmed = :conf, is_orga_confirmed = :oconf, amount_paid = :paid, is_fully_paid = :fullpaid, language = :lang
+                         is_confirmed = :conf, is_waitlist = :wait, is_orga_confirmed = :oconf, amount_paid = :paid, is_fully_paid = :fullpaid, language = :lang, confirmed_at = :cat
                          WHERE id = :id AND event_id = :eid",
                         [
                             'gid'      => $groupId,
@@ -129,15 +181,30 @@ class RegistrationAdminController
                             'lname'    => $coreData['last_name'],
                             'bdate'    => $coreData['birth_date'],
                             'conf'     => $isConf,
+                            'wait'     => $isWait,
                             'oconf'    => $isOrgaConf,
                             'paid'     => $amountPaid,
                             'fullpaid' => $isFullPaid,
                             'lang'     => $lang,
+                            'cat'      => $confirmedAt,
                             'id'       => $regId,
                             'eid'      => $eventId,
                         ]
                     );
                     RegistrationRepository::saveFieldValues($regId, $fields, $submittedVals);
+
+                    // Statusänderungen im Verlaufs-Protokoll vermerken
+                    if ($oldReg) {
+                        if ((int)$oldReg['is_confirmed'] === 0 && $isConf === 1) {
+                            RegistrationRepository::appendHistoryLog($regId, 'E-Mail-Bestätigung manuell auf „Bestätigt“ gesetzt' . ($isWait ? ' (Warteliste)' : ' (Reguläre Liste)'), true);
+                        }
+                        if ((int)($oldReg['is_waitlist'] ?? 0) === 1 && $isWait === 0) {
+                            RegistrationRepository::appendHistoryLog($regId, 'Von der Warteliste auf die reguläre Teilnehmerliste übernommen', true);
+                        } elseif ((int)($oldReg['is_waitlist'] ?? 0) === 0 && $isWait === 1) {
+                            RegistrationRepository::appendHistoryLog($regId, 'Auf die Warteliste gesetzt', true);
+                        }
+                    }
+
                     $_SESSION['flash_success'] = 'Teilnehmerdaten wurden aktualisiert.';
                 } else {
                     $coreData['doi_token'] = bin2hex(random_bytes(20));
@@ -167,7 +234,11 @@ class RegistrationAdminController
 
     private static function sendSystemMailToParticipant(array $event, array $reg, string $mailType): bool
     {
+        $regId      = (int)$reg['id'];
+        $eventId    = (int)$event['id'];
+        $groupId    = (int)$reg['group_id'];
         $langSuffix = ($reg['language'] ?? 'de') === 'en' ? 'en' : 'de';
+
         $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
         $host   = $_SERVER['HTTP_HOST'] ?? 'localhost';
         $dir    = rtrim(dirname($_SERVER['PHP_SELF']), '/\\');
@@ -176,28 +247,32 @@ class RegistrationAdminController
         if ($token === '') {
             $token = bin2hex(random_bytes(20));
             $tRegs = Database::table('registrations');
-            Database::query("UPDATE {$tRegs} SET doi_token = :tok WHERE id = :id", ['tok' => $token, 'id' => (int)$reg['id']]);
+            Database::query("UPDATE {$tRegs} SET doi_token = :tok WHERE id = :id", ['tok' => $token, 'id' => $regId]);
         }
 
-        $confirmLink = "{$scheme}://{$host}{$dir}/register.php?event_id={$event['id']}&action=confirm&id={$reg['id']}&token={$token}&lang={$langSuffix}";
+        $confirmLink = "{$scheme}://{$host}{$dir}/register.php?event_id={$eventId}&action=confirm&id={$regId}&token={$token}&lang={$langSuffix}";
         $startF = format_date($event['start_date'], $langSuffix);
         $endF   = format_date($event['end_date'], $langSuffix);
 
+        $waitlistPosition = RegistrationRepository::getWaitlistPosition($eventId, $groupId, $regId);
+
         $vars = [
-            'vorname'  => $reg['first_name'],
-            'nachname' => $reg['last_name'],
-            'conname'  => $event['title'],
-            'condatum' => ($startF === $endF) ? $startF : "{$startF} – {$endF}",
-            'gruppe'   => ($langSuffix === 'en' && !empty($reg['group_name_en'])) ? $reg['group_name_en'] : ($reg['group_name_de'] ?? ''),
-            'betrag'   => number_format((float)$reg['amount_paid'], 2, ',', '.'),
-            'link'     => $confirmLink,
+            'vorname'          => $reg['first_name'],
+            'nachname'         => $reg['last_name'],
+            'conname'          => $event['title'],
+            'condatum'         => ($startF === $endF) ? $startF : "{$startF} – {$endF}",
+            'gruppe'           => ($langSuffix === 'en' && !empty($reg['group_name_en'])) ? $reg['group_name_en'] : ($reg['group_name_de'] ?? ''),
+            'betrag'           => number_format((float)$reg['amount_paid'], 2, ',', '.'),
+            'link'             => $confirmLink,
+            'wartelistenplatz' => (string)$waitlistPosition,
         ];
 
         $map = [
-            'doi'      => ['mail_tpl_doi_subject_', 'mail_tpl_doi_body_'],
-            'confirm'  => ['mail_tpl_confirm_subject_', 'mail_tpl_confirm_body_'],
-            'reminder' => ['mail_tpl_reminder_subject_', 'mail_tpl_reminder_body_'],
-            'paid'     => ['mail_tpl_paid_subject_', 'mail_tpl_paid_body_'],
+            'doi'      => ['mail_tpl_doi_subject_', 'mail_tpl_doi_body_', 'E-Mail zur E-Mail-Bestätigung erneut gesendet'],
+            'waitlist' => ['mail_tpl_waitlist_subject_', 'mail_tpl_waitlist_body_', "Wartelistenplatz-Bestätigung per E-Mail gesendet (Platz #{$waitlistPosition})"],
+            'confirm'  => ['mail_tpl_confirm_subject_', 'mail_tpl_confirm_body_', 'Anmeldebestätigung (Eingangsbestätigung) per E-Mail gesendet'],
+            'reminder' => ['mail_tpl_reminder_subject_', 'mail_tpl_reminder_body_', 'Zahlungserinnerung per E-Mail gesendet'],
+            'paid'     => ['mail_tpl_paid_subject_', 'mail_tpl_paid_body_', 'Geldeingangsbestätigung per E-Mail gesendet (' . $vars['betrag'] . ' €)'],
         ];
 
         if (!isset($map[$mailType])) {
@@ -207,19 +282,26 @@ class RegistrationAdminController
         $subjTpl = (string)Database::getSetting($map[$mailType][0] . $langSuffix, '{conname}');
         $bodyTpl = (string)Database::getSetting($map[$mailType][1] . $langSuffix, '');
 
-        $tRegs = Database::table('registrations');
-        if ($mailType === 'confirm') {
-            Database::query("UPDATE {$tRegs} SET is_orga_confirmed = 1 WHERE id = :id", ['id' => (int)$reg['id']]);
-        } elseif ($mailType === 'paid') {
-            Database::query("UPDATE {$tRegs} SET is_fully_paid = 1 WHERE id = :id", ['id' => (int)$reg['id']]);
-        }
-
-        return Mailer::send(
+        $sent = Mailer::send(
             (string)$reg['email'],
             Mailer::parseTemplate($subjTpl, $vars),
             Mailer::parseTemplate($bodyTpl, $vars),
             trim((string)$event['admin_email']) ?: null
         );
+
+        if ($sent) {
+            $tRegs = Database::table('registrations');
+            if ($mailType === 'confirm') {
+                Database::query("UPDATE {$tRegs} SET is_orga_confirmed = 1 WHERE id = :id", ['id' => $regId]);
+            } elseif ($mailType === 'paid') {
+                Database::query("UPDATE {$tRegs} SET is_fully_paid = 1 WHERE id = :id", ['id' => $regId]);
+            } elseif ($mailType === 'waitlist') {
+                Database::query("UPDATE {$tRegs} SET waitlist_confirmed = 1 WHERE id = :id", ['id' => $regId]);
+            }
+            RegistrationRepository::appendHistoryLog($regId, $map[$mailType][2], true);
+        }
+
+        return $sent;
     }
 
     private static function renderList(array $event): void
@@ -229,6 +311,7 @@ class RegistrationAdminController
         $regs    = RegistrationRepository::allForEvent($eventId, $event['start_date']);
 
         $confirmedByGroup = [];
+        $waitlistRegs     = [];
         $unconfirmedDoi   = [];
         $totalMoney       = 0.0;
         $openPaymentCount = 0;
@@ -237,6 +320,8 @@ class RegistrationAdminController
             $totalMoney += (float)$r['amount_paid'];
             if ((int)$r['is_confirmed'] === 0) {
                 $unconfirmedDoi[] = $r;
+            } elseif ((int)($r['is_waitlist'] ?? 0) === 1) {
+                $waitlistRegs[] = $r;
             } else {
                 $confirmedByGroup[(int)$r['group_id']][] = $r;
                 if ((int)$r['is_fully_paid'] === 0) {
@@ -245,15 +330,34 @@ class RegistrationAdminController
             }
         }
 
+        // Warteliste streng chronologisch nach E-Mail-Bestätigung (confirmed_at ASC, id ASC) sortieren
+        usort($waitlistRegs, function (array $a, array $b): int {
+            $ca = (string)($a['confirmed_at'] ?: $a['created_at']);
+            $cb = (string)($b['confirmed_at'] ?: $b['created_at']);
+            if ($ca === $cb) {
+                return (int)$a['id'] <=> (int)$b['id'];
+            }
+            return strcmp($ca, $cb);
+        });
+
+        // Rang pro Teilnehmergruppe auf der Warteliste berechnen
+        $groupRankCounters = [];
+        foreach ($waitlistRegs as &$wr) {
+            $gid = (int)$wr['group_id'];
+            $groupRankCounters[$gid] = ($groupRankCounters[$gid] ?? 0) + 1;
+            $wr['waitlist_rank'] = $groupRankCounters[$gid];
+        }
+        unset($wr);
+
+        $regularCount = count($regs) - count($unconfirmedDoi) - count($waitlistRegs);
+
         ob_start();
-        echo AdminLayout::renderEventSubnav($event, 'registrations');
         ?>
         <div class="card">
             <div class="card-header">
-                <h2>📊 Zusammenfassung: <?= e($event['title']) ?></h2>
+                <h2>Zusammenfassung – <?= e($event['title']) ?></h2>
                 <div>
                     <a href="admin.php?module=registrations&event_id=<?= $eventId ?>&action=new" class="btn btn-primary btn-sm">➕ Teilnehmer manuell eintragen (Orga-Anmeldung)</a>
-                    <a href="admin.php?module=lists&event_id=<?= $eventId ?>" class="btn btn-secondary btn-sm">📋 Zu den Auswertungs- & Drucklisten</a>
                 </div>
             </div>
             <div class="card-body">
@@ -261,7 +365,10 @@ class RegistrationAdminController
                     <div style="background:#f8fafc;padding:0.9rem 1.1rem;border-radius:6px;border:1px solid #e2e8f0;">
                         <div style="font-size:0.82rem;color:#64748b;">Anmeldungen (E-Mail bestätigt)</div>
                         <div style="font-size:1.45rem;font-weight:700;color:#0f172a;">
-                            <?= count($regs) - count($unconfirmedDoi) ?>
+                            <?= $regularCount ?>
+                            <?php if (count($waitlistRegs) > 0): ?>
+                                <span style="font-size:0.9rem;font-weight:600;color:#c2410c;">(+ <?= count($waitlistRegs) ?> Warteliste)</span>
+                            <?php endif; ?>
                             <span style="font-size:0.85rem;font-weight:400;color:#64748b;">(+ <?= count($unconfirmedDoi) ?> unbestätigt)</span>
                         </div>
                     </div>
@@ -272,7 +379,7 @@ class RegistrationAdminController
                         </div>
                     </div>
                     <div style="background:#f8fafc;padding:0.9rem 1.1rem;border-radius:6px;border:1px solid #e2e8f0;">
-                        <div style="font-size:0.82rem;color:#64748b;">Zahlungsstatus</div>
+                        <div style="font-size:0.82rem;color:#64748b;">Zahlungsstatus (reguläre Plätze)</div>
                         <div style="font-size:1.25rem;font-weight:700;color:<?= $openPaymentCount > 0 ? '#b45309' : '#166534' ?>;">
                             <?= $openPaymentCount ?> Zahlung(en) noch offen
                         </div>
@@ -288,12 +395,19 @@ class RegistrationAdminController
             <?php foreach ($groups as $g):
                 $gid = (int)$g['id'];
                 $groupRegs = $confirmedByGroup[$gid] ?? [];
+                $inReg = (int)($g['show_in_registration'] ?? 1) === 1;
+                // Interne Gruppen (wie "Absagen") nur anzeigen, wenn dort mindestens 1 Teilnehmer einsortiert ist
+                if (!$inReg && empty($groupRegs)) {
+                    continue;
+                }
             ?>
                 <div class="card">
                     <div class="card-header">
                         <h2>
                             <?= e($g['name_de']) ?> (<?= count($groupRegs) ?>)
-                            <?php if ($g['calculated_free'] !== null): ?>
+                            <?php if (!$inReg): ?>
+                                <span class="badge badge-gray" style="margin-left:0.5rem;">Interne Gruppe</span>
+                            <?php elseif ($g['calculated_free'] !== null): ?>
                                 <span class="badge badge-green" style="margin-left:0.5rem;"><?= (int)$g['calculated_free'] ?> Plätze frei</span>
                             <?php endif; ?>
                         </h2>
@@ -323,7 +437,7 @@ class RegistrationAdminController
                                     ?>
                                         <tr>
                                             <td>
-                                                <a href="admin.php?module=registrations&event_id=<?= $eventId ?>&action=edit&id=<?= $rid ?>" style="font-weight:600;color:#255E00;">
+                                                <a href="admin.php?module=registrations&event_id=<?= $eventId ?>&action=edit&id=<?= $rid ?>" style="font-weight:600;color:var(--adm-accent);">
                                                     <?= e($r['last_name'] . ', ' . $r['first_name']) ?>
                                                 </a>
                                             </td>
@@ -369,10 +483,11 @@ class RegistrationAdminController
             <?php endforeach; ?>
         </form>
 
+        <!-- Kategorie: Noch nicht per E-Mail bestätigt -->
         <?php if (!empty($unconfirmedDoi)): ?>
             <div class="card" style="border-color:#fcd34d;">
                 <div class="card-header" style="background:#fef3c7;">
-                    <h2 style="color:#92400e;">⏳ Noch nicht per E-Mail bestätigt (Double-Opt-In ausstehend: <?= count($unconfirmedDoi) ?>)</h2>
+                    <h2 style="color:#92400e;">⏳ Noch nicht per E-Mail bestätigt (E-Mail-Bestätigung ausstehend: <?= count($unconfirmedDoi) ?>)</h2>
                 </div>
                 <div class="card-body table-responsive">
                     <table class="data-table">
@@ -398,15 +513,88 @@ class RegistrationAdminController
                                     <td><?= e($r['email']) ?></td>
                                     <td><?= e($r['group_name_de'] ?? '') ?></td>
                                     <td><?= e($r['created_at']) ?></td>
-                                    <td style="display:flex;gap:0.4rem;">
+                                    <td style="display:flex;flex-wrap:wrap;gap:0.4rem;">
                                         <form method="post" action="admin.php?module=registrations&event_id=<?= $eventId ?>" style="margin:0;">
                                             <?= Auth::csrfField() ?>
                                             <input type="hidden" name="sub_action" value="send_mail">
                                             <input type="hidden" name="reg_id" value="<?= $rid ?>">
                                             <input type="hidden" name="mail_type" value="doi">
-                                            <button type="submit" class="btn btn-secondary btn-sm">✉️ Opt-In-Mail erneut senden</button>
+                                            <button type="submit" class="btn btn-secondary btn-sm">✉️ E-Mail-Bestätigung erneut senden</button>
                                         </form>
-                                        <a href="admin.php?module=registrations&event_id=<?= $eventId ?>&action=edit&id=<?= $rid ?>" class="btn btn-secondary btn-sm">✏️ Bearbeiten / Manuell freischalten</a>
+                                        <form method="post" action="admin.php?module=registrations&event_id=<?= $eventId ?>" style="margin:0;">
+                                            <?= Auth::csrfField() ?>
+                                            <input type="hidden" name="sub_action" value="manual_confirm_email">
+                                            <input type="hidden" name="reg_id" value="<?= $rid ?>">
+                                            <button type="submit" class="btn btn-secondary btn-sm">✔ Manuell freischalten</button>
+                                        </form>
+                                        <a href="admin.php?module=registrations&event_id=<?= $eventId ?>&action=edit&id=<?= $rid ?>" class="btn btn-secondary btn-sm">✏️ Bearbeiten</a>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        <?php endif; ?>
+
+        <!-- Kategorie: Wartelisten-Anmeldungen in Reihenfolge ihres Bestätigungszeitpunkts -->
+        <?php if (!empty($waitlistRegs)): ?>
+            <div class="card" style="border-color:#fdba74;">
+                <div class="card-header" style="background:#ffedd5;">
+                    <h2 style="color:#c2410c;">📋 Wartelisten-Anmeldungen in Reihenfolge der E-Mail-Bestätigung (<?= count($waitlistRegs) ?>)</h2>
+                </div>
+                <div class="card-body table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Wartelisten-Platz</th>
+                                <th>Gruppe</th>
+                                <th>Name</th>
+                                <th>E-Mail</th>
+                                <th>E-Mail bestätigt am</th>
+                                <th>Status</th>
+                                <th>Aktionen</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($waitlistRegs as $wr):
+                                $rid = (int)$wr['id'];
+                                $wConf = (int)($wr['waitlist_confirmed'] ?? 0) === 1;
+                            ?>
+                                <tr>
+                                    <td>
+                                        <span class="badge badge-orange" style="font-size:0.86rem;">Platz #<?= (int)$wr['waitlist_rank'] ?></span>
+                                    </td>
+                                    <td><strong><?= e($wr['group_name_de'] ?? '') ?></strong></td>
+                                    <td>
+                                        <a href="admin.php?module=registrations&event_id=<?= $eventId ?>&action=edit&id=<?= $rid ?>" style="font-weight:600;">
+                                            <?= e($wr['last_name'] . ', ' . $wr['first_name']) ?>
+                                        </a>
+                                    </td>
+                                    <td><?= e($wr['email']) ?></td>
+                                    <td><?= e($wr['confirmed_at'] ?: $wr['created_at']) ?></td>
+                                    <td>
+                                        <?php if ($wConf): ?>
+                                            <span class="badge badge-green">✔ Wartelisten-Mail gesendet</span>
+                                        <?php else: ?>
+                                            <span class="badge badge-amber">Noch unbestätigt</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td style="display:flex;flex-wrap:wrap;gap:0.4rem;">
+                                        <form method="post" action="admin.php?module=registrations&event_id=<?= $eventId ?>" style="margin:0;">
+                                            <?= Auth::csrfField() ?>
+                                            <input type="hidden" name="sub_action" value="send_mail">
+                                            <input type="hidden" name="reg_id" value="<?= $rid ?>">
+                                            <input type="hidden" name="mail_type" value="waitlist">
+                                            <button type="submit" class="btn btn-secondary btn-sm">✉️ Wartelistenplatz bestätigen</button>
+                                        </form>
+                                        <form method="post" action="admin.php?module=registrations&event_id=<?= $eventId ?>" style="margin:0;">
+                                            <?= Auth::csrfField() ?>
+                                            <input type="hidden" name="sub_action" value="release_from_waitlist">
+                                            <input type="hidden" name="reg_id" value="<?= $rid ?>">
+                                            <button type="submit" class="btn btn-primary btn-sm">✅ Anmeldung freigeben</button>
+                                        </form>
+                                        <a href="admin.php?module=registrations&event_id=<?= $eventId ?>&action=edit&id=<?= $rid ?>" class="btn btn-secondary btn-sm">✏️ Details</a>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -416,7 +604,7 @@ class RegistrationAdminController
             </div>
         <?php endif; ?>
         <?php
-        AdminLayout::render('Teilnehmerverwaltung: ' . $event['title'], 'registrations', (string)ob_get_clean(), $eventId);
+        AdminLayout::render('Anmeldeverwaltung – ' . $event['title'], 'registrations', (string)ob_get_clean(), $eventId);
     }
 
     private static function renderEditPerson(array $event, int $regId): void
@@ -435,31 +623,52 @@ class RegistrationAdminController
             'email'             => '',
             'birth_date'        => '',
             'is_confirmed'      => 1,
+            'is_waitlist'       => 0,
             'is_orga_confirmed' => 1,
             'amount_paid'       => 0.00,
             'is_fully_paid'     => 0,
             'language'          => 'de',
+            'history_log'       => '',
             'values'            => [],
         ];
 
         $ageAtEvent = calculate_age_at($r['birth_date'] ?: null, $event['start_date']);
+        $isWaitlist = (int)($r['is_waitlist'] ?? 0) === 1;
+        $waitPos    = (!$isNew && $isWaitlist) ? RegistrationRepository::getWaitlistPosition($eventId, (int)$r['group_id'], (int)$r['id']) : null;
 
         ob_start();
-        echo AdminLayout::renderEventSubnav($event, 'registrations');
         ?>
 
         <?php if (!$isNew): ?>
             <div class="card">
                 <div class="card-header">
-                    <h2>✉️ System-E-Mails an <?= e($r['first_name'] . ' ' . $r['last_name']) ?> (<?= e($r['email']) ?>) senden</h2>
+                    <h2>✉️ System-E-Mails & Aktionen für <?= e($r['first_name'] . ' ' . $r['last_name']) ?> (<?= e($r['email']) ?>)</h2>
                 </div>
-                <div class="card-body" style="display:flex;flex-wrap:wrap;gap:0.75rem;">
+                <div class="card-body" style="display:flex;flex-wrap:wrap;gap:0.65rem;">
+                    <?php if ($isWaitlist): ?>
+                        <form method="post" action="admin.php?module=registrations&event_id=<?= $eventId ?>" style="margin:0;">
+                            <?= Auth::csrfField() ?>
+                            <input type="hidden" name="sub_action" value="send_mail">
+                            <input type="hidden" name="return_to" value="edit">
+                            <input type="hidden" name="reg_id" value="<?= (int)$r['id'] ?>">
+                            <input type="hidden" name="mail_type" value="waitlist">
+                            <button type="submit" class="btn btn-warning btn-sm">✉️ Wartelistenplatz bestätigen (aktuell Platz #<?= (int)$waitPos ?>)</button>
+                        </form>
+                        <form method="post" action="admin.php?module=registrations&event_id=<?= $eventId ?>" style="margin:0;">
+                            <?= Auth::csrfField() ?>
+                            <input type="hidden" name="sub_action" value="release_from_waitlist">
+                            <input type="hidden" name="return_to" value="edit">
+                            <input type="hidden" name="reg_id" value="<?= (int)$r['id'] ?>">
+                            <button type="submit" class="btn btn-primary btn-sm">✅ Anmeldung freigeben (auf reguläre Liste übernehmen)</button>
+                        </form>
+                    <?php endif; ?>
+
                     <?php
                     $mailButtons = [
                         'confirm'  => '✅ Anmeldebestätigung senden (& Orga-Haken setzen)',
                         'paid'     => '💶 Geldeingangsbestätigung senden (& Voller Preis bezahlt setzen)',
                         'reminder' => '⏰ Zahlungserinnerung senden',
-                        'doi'      => '🔗 Double-Opt-In Bestätigungslink erneut senden',
+                        'doi'      => '🔗 Link zur E-Mail-Bestätigung erneut senden',
                     ];
                     foreach ($mailButtons as $mType => $mLabel):
                     ?>
@@ -483,7 +692,7 @@ class RegistrationAdminController
 
             <div class="card">
                 <div class="card-header">
-                    <h2><?= $isNew ? '➕ Teilnehmer manuell eintragen (Orga-Anmeldung)' : '⚙️ Status, Gruppe & Zahlung: ' . e($r['first_name'] . ' ' . $r['last_name']) ?></h2>
+                    <h2><?= $isNew ? '➕ Teilnehmer manuell eintragen (Orga-Anmeldung)' : 'Status, Gruppe & Zahlung – ' . e($r['first_name'] . ' ' . $r['last_name']) ?></h2>
                     <a href="admin.php?module=registrations&event_id=<?= $eventId ?>" class="btn btn-secondary btn-sm">&larr; Zurück zur Liste</a>
                 </div>
                 <div class="card-body">
@@ -493,7 +702,7 @@ class RegistrationAdminController
                             <select id="group_id" name="group_id" required>
                                 <?php foreach ($groups as $g): ?>
                                     <option value="<?= (int)$g['id'] ?>" <?= (int)$r['group_id'] === (int)$g['id'] ? 'selected' : '' ?>>
-                                        <?= e($g['name_de']) ?>
+                                        <?= e($g['name_de']) ?><?= (int)($g['show_in_registration'] ?? 1) === 0 ? ' (Interne Gruppe)' : '' ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
@@ -511,10 +720,14 @@ class RegistrationAdminController
                         </div>
                     </div>
 
-                    <div style="display:flex;flex-wrap:wrap;gap:1.75rem;background:#f8fafc;padding:0.9rem 1.1rem;border-radius:6px;border:1px solid #e2e8f0;margin-bottom:1rem;">
+                    <div style="display:flex;flex-wrap:wrap;gap:1.5rem;background:#f8fafc;padding:0.9rem 1.1rem;border-radius:6px;border:1px solid #e2e8f0;margin-bottom:1rem;">
                         <label style="margin:0;cursor:pointer;">
                             <input type="checkbox" name="is_confirmed" value="1" <?= (int)$r['is_confirmed'] === 1 ? 'checked' : '' ?>>
-                            📧 <strong>E-Mail-Adresse bestätigt (Double-Opt-In)</strong>
+                            📧 <strong>E-Mail-Bestätigung erfolgt</strong>
+                        </label>
+                        <label style="margin:0;cursor:pointer;">
+                            <input type="checkbox" name="is_waitlist" value="1" <?= $isWaitlist ? 'checked' : '' ?>>
+                            📋 <strong>Auf Warteliste</strong> <?= $waitPos !== null ? '(aktuell Platz #' . $waitPos . ')' : '' ?>
                         </label>
                         <label style="margin:0;cursor:pointer;">
                             <input type="checkbox" name="is_orga_confirmed" value="1" <?= (int)$r['is_orga_confirmed'] === 1 ? 'checked' : '' ?>>
@@ -538,7 +751,7 @@ class RegistrationAdminController
                     </div>
                     <div class="grid-2">
                         <div class="form-group">
-                            <label>E-Mail-Adresse (Stammsatz)</label>
+                            <label>E-Mail-Adresse (Stammsatz) 🔒</label>
                             <input type="email" name="core_email" value="<?= e($r['email']) ?>">
                         </div>
                         <div class="form-group">
@@ -556,6 +769,19 @@ class RegistrationAdminController
                 </div>
             </div>
 
+            <!-- Automatisches, schreibgeschütztes Verlaufs- & Zeitprotokoll -->
+            <?php if (!$isNew): ?>
+                <div class="card">
+                    <div class="card-header">
+                        <h2>🕒 Zeitlicher Verlauf & System-Protokoll</h2>
+                    </div>
+                    <div class="card-body">
+                        <textarea rows="5" readonly style="font-family:monospace;font-size:0.85rem;background:#f8fafc;color:#334155;cursor:default;"><?= e(trim((string)($r['history_log'] ?? '')) ?: 'Noch keine Protokolleinträge vorhanden.') ?></textarea>
+                        <div class="help-text">Dieses Protokoll wird vom System bei Anmeldungen, E-Mail-Bestätigungen, Wartelisten-Änderungen und versendeten System-Mails automatisch fortgeschrieben.</div>
+                    </div>
+                </div>
+            <?php endif; ?>
+
             <div class="card">
                 <div class="card-header">
                     <h2>📋 Formularfelder & Interne Orga-Felder</h2>
@@ -567,10 +793,11 @@ class RegistrationAdminController
                         $val  = (string)($r['values'][$key] ?? '');
                         $isOrgaOnly = (int)$f['is_orga_only'] === 1;
                         $isSens     = (int)$f['is_sensitive'] === 1;
+                        $isEnc      = $isSens || ((int)($f['is_encrypted'] ?? 0) === 1);
 
                         if ($type === 'heading'):
                     ?>
-                        <h3 style="margin:1.5rem 0 0.75rem;padding-bottom:0.35rem;border-bottom:2px solid #cbd5e1;color:#255E00;">
+                        <h3 style="margin:1.5rem 0 0.75rem;padding-bottom:0.35rem;border-bottom:2px solid #cbd5e1;color:var(--adm-accent);">
                             <?= e($f['label_de']) ?>
                         </h3>
                         <?php continue; endif; ?>
@@ -582,7 +809,9 @@ class RegistrationAdminController
                                     <span class="badge badge-blue">👁️ Nur für Orga sichtbar</span>
                                 <?php endif; ?>
                                 <?php if ($isSens): ?>
-                                    <span class="badge badge-amber">🔒 Sensible Daten (AES-256 verschlüsselt)</span>
+                                    <span class="badge badge-amber">🧹 Sensible Daten (Verschlüsselt + 1-Klick-Bereinigung)</span>
+                                <?php elseif ($isEnc): ?>
+                                    <span class="badge badge-gray">🔒 Verschlüsselt</span>
                                 <?php endif; ?>
                             </label>
 
@@ -618,7 +847,7 @@ class RegistrationAdminController
         <?php if (!$isNew): ?>
             <div class="card" style="border-color:#fca5a5;">
                 <div class="card-body" style="display:flex;align-items:center;justify-content:space-between;">
-                    <span>Diese Anmeldung unwiderruflich aus der Datenbank entfernen:</span>
+                    <span>Diese Anmeldung unwiderruflich aus der Datenbank entfernen</span>
                     <form method="post" action="admin.php?module=registrations&event_id=<?= $eventId ?>" onsubmit="return confirm('Anmeldung wirklich löschen?');" style="margin:0;">
                         <?= Auth::csrfField() ?>
                         <input type="hidden" name="sub_action" value="delete_person">
@@ -629,6 +858,6 @@ class RegistrationAdminController
             </div>
         <?php endif; ?>
         <?php
-        AdminLayout::render($isNew ? 'Orga-Anmeldung' : 'Teilnehmer bearbeiten: ' . $r['first_name'] . ' ' . $r['last_name'], 'registrations', (string)ob_get_clean(), $eventId);
+        AdminLayout::render($isNew ? 'Orga-Anmeldung' : 'Teilnehmer bearbeiten – ' . $r['first_name'] . ' ' . $r['last_name'], 'registrations', (string)ob_get_clean(), $eventId);
     }
 }
