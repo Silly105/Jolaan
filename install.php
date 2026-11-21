@@ -104,7 +104,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $allChecksOk) {
                     `name` VARCHAR(150) NOT NULL,
                     `role` ENUM('admin', 'orga') NOT NULL DEFAULT 'orga',
                     `is_active` TINYINT(1) NOT NULL DEFAULT 1,
-                    `totp_secret` VARCHAR(120) NULL DEFAULT NULL,
+                    `totp_secret` VARCHAR(255) NULL DEFAULT NULL,
                     `totp_enabled` TINYINT(1) NOT NULL DEFAULT 0,
                     `totp_backup_codes` TEXT NULL DEFAULT NULL,
                     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -222,13 +222,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $allChecksOk) {
             // Config & Verschlüsselungs-Key speichern
             Crypto::generateKeyFile();
             Config::save([
-                'db_host'      => trim($form['db_host']),
-                'db_port'      => (int)$form['db_port'],
-                'db_name'      => trim($form['db_name']),
-                'db_user'      => trim($form['db_user']),
-                'db_pass'      => $form['db_pass'],
-                'db_prefix'    => $prefix,
-                'installed_at' => date('c'),
+                'db_host'          => trim($form['db_host']),
+                'db_port'          => (int)$form['db_port'],
+                'db_name'          => trim($form['db_name']),
+                'db_user'          => trim($form['db_user']),
+                'db_pass'          => $form['db_pass'],
+                'db_prefix'        => $prefix,
+                'db_version_cache' => \App\Core\Version::CURRENT,
+                'installed_at'     => date('c'),
             ]);
 
             // Standard-Settings eintragen

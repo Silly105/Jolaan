@@ -5,7 +5,7 @@ namespace App\Core;
 
 class Version
 {
-    public const CURRENT = '0.9.003';
+    public const CURRENT = '0.9.004';
 
     /**
      * Fortlaufende Änderungshistorie & Migrations-Schritte.
@@ -62,6 +62,19 @@ class Version
                     'Seite „Verfügbare Plätze“ ist nun auch für die Rolle SL freigegeben',
                     'Automatisches, schreibgeschütztes Verlaufs- & Zeitprotokoll pro Teilnehmer (Anmeldung, E-Mail-Bestätigung, Warteliste, Nachrücken, versendete Bestätigungen & Zahlungserinnerungen)',
                     'Menüführung im Backend komplett überarbeitet: Dauerhafte Anzeige der gewählten Veranstaltung als eigene Menü-Kategorie, Entfernung der Emoji-Symbole und oberen Subnav-Buttons, klare Umbenennungen („Abfragefelder“, „Verfügbare Plätze“, „Seiteneinstellungen“ etc.) und durchgängige Bezeichnung „E-Mail-Bestätigung“',
+                ],
+            ],
+            '0.9.004' => [
+                'date'    => '2026-11-21',
+                'title'   => 'Code-Review, Logik-Korrekturen für Interne Gruppen/Warteliste & Performance-Optimierung',
+                'changes' => [
+                    'Interne Teilnehmergruppen (z. B. „Absagen“) werden bei „Alle Gruppen“-Auswertungslisten sowie bei den Zählern für bestätigte Teilnehmer und offene Zahlungen nicht mehr fälschlich mitgezählt',
+                    'Im Listen-Generator kann nun gezielt auch nach Wartelisten-Teilnehmern gefiltert werden („Nur reguläre Teilnehmer“, „Nur Warteliste“, „Regulär + Warteliste“)',
+                    'Doppelte Stammsatz-Felder auf der Seite „Teilnehmer bearbeiten“ zusammengeführt, damit Änderungen an Name, E-Mail oder Geburtsdatum nicht durch untere Formularfelder überschrieben werden',
+                    'Rein interne Teilnehmergruppen (ohne Anzeige in Anmeldung und Startseite) in der Übersetzungstabelle von der Übersetzungspflicht ausgenommen',
+                    'Startseiten-Badge unterscheidet bei ausgebuchten Gruppen nun zwischen aktivierter Warteliste („Ausgebucht / Warteliste“) und deaktivierter Warteliste („Ausgebucht“)',
+                    'Wartelisten-Prüfung bei E-Mail-Bestätigung berücksichtigt nun auch, ob die gesamte Veranstaltung inzwischen gesperrt wurde',
+                    'Fehlerprüfung beim Dokumenten-Upload unter „Abfragefelder“, Spaltenbreite users.totp_secret in install.php auf VARCHAR(255) vereinheitlicht und Versions-Caching in config.php ergänzt',
                 ],
             ],
         ];

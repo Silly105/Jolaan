@@ -40,13 +40,17 @@ class RegistrationRepository
 
     /**
      * Prüft zum Zeitpunkt der E-Mail-Bestätigung (oder manuellen Freischaltung), ob die gewählte Teilnehmergruppe
-     * bereits voll ist. Falls ja (und die Anmeldung nicht über den Geheim-Link kam), wird der Teilnehmer auf die
-     * Warteliste (is_waitlist = 1) gesetzt.
+     * bereits voll ist oder die gesamte Veranstaltung gesperrt wurde. Falls ja (und die Anmeldung nicht über den
+     * Geheim-Link kam), wird der Teilnehmer auf die Warteliste (is_waitlist = 1) gesetzt.
      */
     public static function determineWaitlistStatusOnConfirm(int $eventId, int $groupId, bool $isSecretUnlock): bool
     {
         if ($isSecretUnlock) {
             return false; // Geheim-Link überspringt immer die Warteliste
+        }
+        $event = EventRepository::find($eventId);
+        if ($event && ($event['status'] ?? 'open') === 'locked') {
+            return true;
         }
         $groups = EventRepository::getGroupsWithSeats($eventId);
         foreach ($groups as $g) {
@@ -190,7 +194,7 @@ class RegistrationRepository
         $tFields = Database::table('form_fields');
 
         $reg = Database::fetchOne(
-            "SELECT r.*, g.name_de AS group_name_de, g.name_en AS group_name_en
+            "SELECT r.*, g.name_de AS group_name_de, g.name_en AS group_name_en, g.show_in_registration AS group_show_in_reg
              FROM {$tRegs} r
              LEFT JOIN {$tGroups} g ON g.id = r.group_id
              WHERE r.id = :id LIMIT 1",
@@ -238,7 +242,7 @@ class RegistrationRepository
         $tFields = Database::table('form_fields');
 
         $regs = Database::fetchAll(
-            "SELECT r.*, g.name_de AS group_name_de, g.name_en AS group_name_en
+            "SELECT r.*, g.name_de AS group_name_de, g.name_en AS group_name_en, g.show_in_registration AS group_show_in_reg
              FROM {$tRegs} r
              LEFT JOIN {$tGroups} g ON g.id = r.group_id
              WHERE r.event_id = :eid

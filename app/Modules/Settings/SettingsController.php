@@ -498,8 +498,8 @@ class SettingsController
             <div class="card-body table-responsive">
                 <p style="margin-top:0;font-size:0.88rem;color:#475569;">
                     <strong>Rollen-Konzept</strong> –
-                    <code>Admin</code> hat Vollzugriff (Cons, Formular-Baukasten, DSGVO, Systemeinstellungen).
-                    <code>SL</code> kann sich im Backend anmelden, Teilnehmerlisten/Filter/Druckansichten einsehen sowie Zahlungen und Anmeldungen bearbeiten.
+                    <code>Admin</code> hat Vollzugriff (Cons, Abfragefelder, DSGVO-Center, Seiteneinstellungen).
+                    <code>SL</code> kann sich im Backend anmelden, Anmeldeverwaltung, Verfügbare Plätze sowie Listen/Filter/Druckansichten einsehen und bearbeiten.
                 </p>
                 <table class="data-table">
                     <thead>
@@ -811,7 +811,7 @@ class SettingsController
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             Auth::requireCsrf();
-            $executed = Updater::runPendingMigrations();
+            $executed = Updater::runPendingMigrations(true);
             if (!empty($executed)) {
                 $_SESSION['flash_success'] = 'Datenbank-Update erfolgreich durchgeführt für Version(en): ' . implode(', ', $executed);
             } else {

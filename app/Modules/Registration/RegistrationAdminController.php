@@ -126,6 +126,8 @@ class RegistrationAdminController
                     }
                 }
 
+                $oldReg = $regId > 0 ? RegistrationRepository::findWithValues($regId) : null;
+
                 $coreData = [
                     'first_name'        => trim((string)($_POST['core_first_name'] ?? '')),
                     'last_name'         => trim((string)($_POST['core_last_name'] ?? '')),
@@ -139,22 +141,44 @@ class RegistrationAdminController
                     'language'          => $lang,
                 ];
 
+                // Bidirektionale Synchronisation zwischen Stammsatz (core_*) und dynamischen System-Mapping-Feldern:
+                // Wurde oben der Stammsatz geändert, übernimmt das dynamische Feld den neuen Wert;
+                // wurde unten das dynamische Feld geändert (oder ist der Eintrag neu), übernimmt der Stammsatz den Wert.
                 foreach ($fields as $f) {
                     $k = $f['field_key'];
                     $v = trim((string)($submittedVals[$k] ?? ''));
-                    if ($f['system_mapping'] === 'firstname' && $v !== '') {
-                        $coreData['first_name'] = $v;
-                    } elseif ($f['system_mapping'] === 'lastname' && $v !== '') {
-                        $coreData['last_name'] = $v;
-                    } elseif ($f['system_mapping'] === 'email' && $v !== '') {
-                        $coreData['email'] = $v;
-                    } elseif ($f['system_mapping'] === 'birthdate' && $v !== '') {
-                        $coreData['birth_date'] = $v;
+                    if ($f['system_mapping'] === 'firstname') {
+                        $oldCore = (string)($oldReg['first_name'] ?? '');
+                        if ($oldReg && $coreData['first_name'] !== $oldCore && $coreData['first_name'] !== '') {
+                            $submittedVals[$k] = $coreData['first_name'];
+                        } elseif ($v !== '') {
+                            $coreData['first_name'] = $v;
+                        }
+                    } elseif ($f['system_mapping'] === 'lastname') {
+                        $oldCore = (string)($oldReg['last_name'] ?? '');
+                        if ($oldReg && $coreData['last_name'] !== $oldCore && $coreData['last_name'] !== '') {
+                            $submittedVals[$k] = $coreData['last_name'];
+                        } elseif ($v !== '') {
+                            $coreData['last_name'] = $v;
+                        }
+                    } elseif ($f['system_mapping'] === 'email') {
+                        $oldCore = (string)($oldReg['email'] ?? '');
+                        if ($oldReg && $coreData['email'] !== $oldCore && $coreData['email'] !== '') {
+                            $submittedVals[$k] = $coreData['email'];
+                        } elseif ($v !== '') {
+                            $coreData['email'] = $v;
+                        }
+                    } elseif ($f['system_mapping'] === 'birthdate') {
+                        $oldCore = (string)($oldReg['birth_date'] ?? '');
+                        if ($oldReg && (string)$coreData['birth_date'] !== $oldCore && $coreData['birth_date'] !== null) {
+                            $submittedVals[$k] = (string)$coreData['birth_date'];
+                        } elseif ($v !== '') {
+                            $coreData['birth_date'] = $v;
+                        }
                     }
                 }
 
                 if ($regId > 0) {
-                    $oldReg = RegistrationRepository::findWithValues($regId);
                     $encCoreEmail  = $coreData['email'] !== '' ? Crypto::encrypt($coreData['email']) : '';
                     $coreEmailHash = $coreData['email'] !== '' ? Crypto::blindIndex($coreData['email']) : '';
 
@@ -315,17 +339,23 @@ class RegistrationAdminController
         $unconfirmedDoi   = [];
         $totalMoney       = 0.0;
         $openPaymentCount = 0;
+        $regularCount     = 0;
 
         foreach ($regs as $r) {
             $totalMoney += (float)$r['amount_paid'];
+            $isInternalGroup = (int)($r['group_show_in_reg'] ?? 1) === 0;
+
             if ((int)$r['is_confirmed'] === 0) {
                 $unconfirmedDoi[] = $r;
             } elseif ((int)($r['is_waitlist'] ?? 0) === 1) {
                 $waitlistRegs[] = $r;
             } else {
                 $confirmedByGroup[(int)$r['group_id']][] = $r;
-                if ((int)$r['is_fully_paid'] === 0) {
-                    $openPaymentCount++;
+                if (!$isInternalGroup) {
+                    $regularCount++;
+                    if ((int)$r['is_fully_paid'] === 0) {
+                        $openPaymentCount++;
+                    }
                 }
             }
         }
@@ -348,8 +378,6 @@ class RegistrationAdminController
             $wr['waitlist_rank'] = $groupRankCounters[$gid];
         }
         unset($wr);
-
-        $regularCount = count($regs) - count($unconfirmedDoi) - count($waitlistRegs);
 
         ob_start();
         ?>

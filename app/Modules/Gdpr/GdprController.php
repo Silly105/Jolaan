@@ -247,19 +247,23 @@ class GdprController
                             </div>
                         <?php endforeach; ?>
 
-                        <?php if (!empty($foundRecords) && filter_var($searchQuery, FILTER_VALIDATE_EMAIL)): ?>
+                        <?php
+                        // Alle eindeutigen E-Mail-Adressen aus den Suchtreffern ermitteln (damit Löschung auch nach Namenssuche funktioniert)
+                        $foundEmails = array_values(array_unique(array_filter(array_column($foundRecords, 'email'))));
+                        foreach ($foundEmails as $delEmail):
+                        ?>
                             <form method="post" action="admin.php?module=gdpr" onsubmit="return confirm('Alle Anmeldungen dieser E-Mail-Adresse unwiderruflich löschen?');" style="background:#fef2f2;border:1px solid #fca5a5;padding:1rem;border-radius:6px;margin-top:1rem;">
                                 <?= Auth::csrfField() ?>
                                 <input type="hidden" name="sub_action" value="delete_person_all">
-                                <input type="hidden" name="target_email" value="<?= e($searchQuery) ?>">
-                                <strong style="color:#991b1b;">🗑️ Recht auf Löschung (Art. 17 DSGVO):</strong>
-                                <p style="margin:0.35rem 0;font-size:0.88rem;">Um alle gespeicherten Anmeldungen zu <code><?= e($searchQuery) ?></code> restlos zu löschen, tippe <strong>LÖSCHEN</strong> ein:</p>
+                                <input type="hidden" name="target_email" value="<?= e($delEmail) ?>">
+                                <strong style="color:#991b1b;">🗑️ Recht auf Löschung (Art. 17 DSGVO)</strong>
+                                <p style="margin:0.35rem 0;font-size:0.88rem;">Um alle gespeicherten Anmeldungen zu <code><?= e($delEmail) ?></code> restlos zu löschen, tippe <strong>LÖSCHEN</strong> ein</p>
                                 <div style="display:flex;gap:0.5rem;max-width:360px;">
                                     <input type="text" name="confirm_word" placeholder="LÖSCHEN" required>
                                     <button type="submit" class="btn btn-danger btn-sm">Endgültig löschen</button>
                                 </div>
                             </form>
-                        <?php endif; ?>
+                        <?php endforeach; ?>
                     </div>
                 <?php endif; ?>
             </div>
@@ -272,7 +276,7 @@ class GdprController
             </div>
             <div class="card-body table-responsive">
                 <p style="margin-top:0;color:#475569;font-size:0.9rem;">
-                    Alle im Formular-Baukasten als <strong>„🔒 Sensible Daten (DSGVO)“</strong> gekennzeichneten Felder (z. B. Allergien, Krankheiten, Phobien, Schwangerschaft) werden mit <code>AES-256-GCM</code> verschlüsselt gespeichert und können hier nach Abschluss der Veranstaltung mit einem Klick geleert werden, während die restliche Abrechnungs-/Teilnehmerliste erhalten bleibt.
+                    Alle unter <strong>„Abfragefelder“</strong> als <strong>„🧹 Sensible Daten (Nach Con per 1-Klick löschen)“</strong> gekennzeichneten Felder (z. B. Allergien, Krankheiten, Phobien, Schwangerschaft) werden mit <code>AES-256-GCM</code> verschlüsselt gespeichert und können hier nach Abschluss der Veranstaltung mit einem Klick geleert werden, während die restliche Abrechnungs-/Teilnehmerliste sowie verschlüsselte Kontaktdaten (E-Mail, Telefon) erhalten bleiben.
                 </p>
                 <table class="data-table">
                     <thead>

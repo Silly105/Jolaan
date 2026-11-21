@@ -14,15 +14,28 @@ class EventAdminController
     public static function handleDashboard(): void
     {
         $events = EventRepository::all();
-        $tRegs  = Database::table('registrations');
+        $tRegs   = Database::table('registrations');
+        $tGroups = Database::table('event_groups');
 
         foreach ($events as &$ev) {
             $eid = (int)$ev['id'];
             $ev['groups'] = EventRepository::getGroupsWithSeats($eid);
-            $ev['total_regs'] = (int)Database::fetchScalar("SELECT COUNT(*) FROM {$tRegs} WHERE event_id = :eid", ['eid' => $eid]);
-            $ev['confirmed_regs'] = (int)Database::fetchScalar("SELECT COUNT(*) FROM {$tRegs} WHERE event_id = :eid AND is_confirmed = 1 AND is_waitlist = 0", ['eid' => $eid]);
-            $ev['waitlist_regs'] = (int)Database::fetchScalar("SELECT COUNT(*) FROM {$tRegs} WHERE event_id = :eid AND is_confirmed = 1 AND is_waitlist = 1", ['eid' => $eid]);
-            $ev['unpaid_regs'] = (int)Database::fetchScalar("SELECT COUNT(*) FROM {$tRegs} WHERE event_id = :eid AND is_confirmed = 1 AND is_waitlist = 0 AND is_fully_paid = 0", ['eid' => $eid]);
+            $ev['total_regs'] = (int)Database::fetchScalar(
+                "SELECT COUNT(*) FROM {$tRegs} r LEFT JOIN {$tGroups} g ON g.id = r.group_id WHERE r.event_id = :eid AND COALESCE(g.show_in_registration, 1) = 1",
+                ['eid' => $eid]
+            );
+            $ev['confirmed_regs'] = (int)Database::fetchScalar(
+                "SELECT COUNT(*) FROM {$tRegs} r LEFT JOIN {$tGroups} g ON g.id = r.group_id WHERE r.event_id = :eid AND r.is_confirmed = 1 AND r.is_waitlist = 0 AND COALESCE(g.show_in_registration, 1) = 1",
+                ['eid' => $eid]
+            );
+            $ev['waitlist_regs'] = (int)Database::fetchScalar(
+                "SELECT COUNT(*) FROM {$tRegs} r LEFT JOIN {$tGroups} g ON g.id = r.group_id WHERE r.event_id = :eid AND r.is_confirmed = 1 AND r.is_waitlist = 1 AND COALESCE(g.show_in_registration, 1) = 1",
+                ['eid' => $eid]
+            );
+            $ev['unpaid_regs'] = (int)Database::fetchScalar(
+                "SELECT COUNT(*) FROM {$tRegs} r LEFT JOIN {$tGroups} g ON g.id = r.group_id WHERE r.event_id = :eid AND r.is_confirmed = 1 AND r.is_waitlist = 0 AND r.is_fully_paid = 0 AND COALESCE(g.show_in_registration, 1) = 1",
+                ['eid' => $eid]
+            );
         }
         unset($ev);
 

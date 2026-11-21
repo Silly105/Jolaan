@@ -88,9 +88,13 @@ $renderEventCard = function (array $ev): void {
                     $free  = $g['calculated_free'];
                     $full  = (bool)$g['is_full'];
                 ?>
-                    <?php if ($full): ?>
+                    <?php if ($full):
+                        $fullLabel = ((int)($ev['waitlist_enabled'] ?? 1) === 1)
+                            ? I18n::t('index.waitlist_full')
+                            : I18n::t('index.only_full');
+                    ?>
                         <span class="seat-badge full">
-                            <?= e($gName) ?>: <?= e(I18n::t('index.waitlist_full')) ?>
+                            <?= e($gName) ?>: <?= e($fullLabel) ?>
                         </span>
                     <?php elseif ($free !== null): ?>
                         <span class="seat-badge">

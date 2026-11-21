@@ -57,14 +57,22 @@ class FormBuilderController
                     $optionsJson = json_encode(['de' => $optsDe, 'en' => $optsEn], JSON_UNESCAPED_UNICODE);
                 } elseif ($fieldType === 'document') {
                     $existingFile = trim((string)($_POST['existing_doc_path'] ?? ''));
-                    if (!empty($_FILES['doc_file']['name']) && $_FILES['doc_file']['error'] === UPLOAD_ERR_OK) {
+                    if (!empty($_FILES['doc_file']['name'])) {
+                        if (($_FILES['doc_file']['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
+                            $_SESSION['flash_error'] = 'Dokument-Upload fehlgeschlagen (Fehlercode ' . (int)$_FILES['doc_file']['error'] . ').';
+                            header('Location: admin.php?module=formbuilder&event_id=' . ($eventId ?? 0) . ($fieldId > 0 ? '&edit_id=' . $fieldId : ''));
+                            exit;
+                        }
                         $ext = strtolower(pathinfo((string)$_FILES['doc_file']['name'], PATHINFO_EXTENSION));
-                        if (in_array($ext, ['pdf', 'txt', 'doc', 'docx', 'odt', 'png', 'jpg'], true)) {
-                            $fileName = 'doc_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
-                            $destDir  = dirname(__DIR__, 3) . '/storage/uploads';
-                            if (move_uploaded_file($_FILES['doc_file']['tmp_name'], $destDir . '/' . $fileName)) {
-                                $existingFile = 'storage/uploads/' . $fileName;
-                            }
+                        if (!in_array($ext, ['pdf', 'txt', 'doc', 'docx', 'odt', 'png', 'jpg'], true)) {
+                            $_SESSION['flash_error'] = 'Ungültiges Dokumentformat. Erlaubt sind: PDF, TXT, DOC, DOCX, ODT, PNG, JPG.';
+                            header('Location: admin.php?module=formbuilder&event_id=' . ($eventId ?? 0) . ($fieldId > 0 ? '&edit_id=' . $fieldId : ''));
+                            exit;
+                        }
+                        $fileName = 'doc_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+                        $destDir  = dirname(__DIR__, 3) . '/storage/uploads';
+                        if (move_uploaded_file($_FILES['doc_file']['tmp_name'], $destDir . '/' . $fileName)) {
+                            $existingFile = 'storage/uploads/' . $fileName;
                         }
                     }
                     $optionsJson = json_encode([
@@ -180,9 +188,7 @@ class FormBuilderController
         ];
 
         ob_start();
-        if ($event) {
-            echo AdminLayout::renderEventSubnav($event, 'formbuilder');
-        } else {
+        if (!$event) {
             echo '<div class="alert alert-success" style="background:#eff6ff;border-color:#93c5fd;color:#1e3a8a;">📐 Du bearbeitest hier die <strong>globale Standard-Feldvorlage</strong>. Diese Felder werden automatisch vorgeschlagen, wenn eine neue Veranstaltung ohne Kopier-Vorlage erstellt wird.</div>';
         }
 
@@ -338,9 +344,6 @@ class FormBuilderController
         <div class="card">
             <div class="card-header">
                 <h2>📋 Vorhandene Felder (<?= count($fields) ?>)</h2>
-                <?php if ($event && (int)$event['is_bilingual'] === 1): ?>
-                    <a href="admin.php?module=translations&event_id=<?= $eventId ?>" class="btn btn-secondary btn-sm">🌐 Zur Übersetzungstabelle (DE/EN) &rarr;</a>
-                <?php endif; ?>
             </div>
             <div class="card-body">
                 <form method="post" action="admin.php?module=formbuilder&event_id=<?= $eventId ?? 0 ?>">
@@ -550,7 +553,12 @@ class FormBuilderController
         }
 
         $event  = EventRepository::find($eventId);
-        $groups = EventRepository::getGroupsWithSeats($eventId);
+        // Nur öffentlich sichtbare Teilnehmergruppen (die in der Anmeldung oder auf der Startseite erscheinen) müssen übersetzt werden
+        $allGroups = EventRepository::getGroupsWithSeats($eventId);
+        $groups = array_values(array_filter(
+            $allGroups,
+            fn($g) => (int)($g['show_in_registration'] ?? 1) === 1 || (int)($g['show_on_index'] ?? 1) === 1
+        ));
         $fields = EventRepository::getFields($eventId, false);
         $isBilingual = (int)$event['is_bilingual'] === 1;
 
@@ -585,7 +593,6 @@ class FormBuilderController
         }
 
         ob_start();
-        echo AdminLayout::renderEventSubnav($event, 'translations');
         ?>
 
         <?php if ($isBilingual && $missingCount > 0): ?>
@@ -598,7 +605,7 @@ class FormBuilderController
             </div>
         <?php else: ?>
             <div class="alert" style="background:#eff6ff;border:1px solid #93c5fd;color:#1e3a8a;">
-                ℹ️ Zweisprachigkeit ist für diese Veranstaltung derzeit deaktiviert (kann unter „Einstellungen“ aktiviert werden). Du kannst die Übersetzungen hier trotzdem jederzeit vorbereiten.
+                ℹ️ Zweisprachigkeit ist für diese Veranstaltung derzeit deaktiviert (kann unter „Con-Einstellungen“ aktiviert werden). Du kannst die Übersetzungen hier trotzdem jederzeit vorbereiten.
             </div>
         <?php endif; ?>
 

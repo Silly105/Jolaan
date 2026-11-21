@@ -8,15 +8,22 @@ class Updater
     /**
      * Prüft, ob die Datenbank-Version hinter Version::CURRENT liegt, und führt alle fehlenden
      * Migrationsschritte der Reihe nach automatisch aus (unterstützt beliebige Versionssprünge).
+     * Nutzt einen schnellen Config-Cache, damit im laufenden Betrieb keine SQL-Query pro Seitenaufruf nötig ist.
      */
-    public static function runPendingMigrations(): array
+    public static function runPendingMigrations(bool $forceDbCheck = false): array
     {
         if (!Config::isInstalled()) {
             return [];
         }
 
+        $cachedVersion = (string)Config::get('db_version_cache', '');
+        if (!$forceDbCheck && $cachedVersion !== '' && version_compare($cachedVersion, Version::CURRENT, '>=')) {
+            return [];
+        }
+
         $installedVersion = (string)Database::getSetting('db_version', '0.9.000');
         if (version_compare($installedVersion, Version::CURRENT, '>=')) {
+            Config::save(['db_version_cache' => Version::CURRENT]);
             return [];
         }
 
@@ -34,6 +41,7 @@ class Updater
         }
 
         Database::setSetting('db_version', Version::CURRENT);
+        Config::save(['db_version_cache' => Version::CURRENT]);
         return $executed;
     }
 
@@ -140,17 +148,14 @@ class Updater
             $tGroups = Database::table('event_groups');
             $tRegs   = Database::table('registrations');
 
-            // 1. waitlist_enabled in events
             if (!self::columnExists($tEvents, 'waitlist_enabled')) {
                 $pdo->exec("ALTER TABLE {$tEvents} ADD COLUMN `waitlist_enabled` TINYINT(1) NOT NULL DEFAULT 1 AFTER `status`");
             }
 
-            // 2. show_in_registration in event_groups + Standard-Interngruppe "Absagen" ergänzen
             if (!self::columnExists($tGroups, 'show_in_registration')) {
                 $pdo->exec("ALTER TABLE {$tGroups} ADD COLUMN `show_in_registration` TINYINT(1) NOT NULL DEFAULT 1 AFTER `show_on_index`");
             }
 
-            // Prüfen, ob in den globalen Vorlagen (event_id IS NULL) und bestehenden Events schon eine Gruppe "Absagen" existiert
             $globalAbsagen = Database::fetchOne("SELECT id FROM {$tGroups} WHERE event_id IS NULL AND name_de = 'Absagen' LIMIT 1");
             if (!$globalAbsagen) {
                 Database::query(
@@ -171,7 +176,6 @@ class Updater
                 }
             }
 
-            // 3. Wartelisten- & Verlaufs-Protokoll-Spalten in registrations ergänzen
             if (!self::columnExists($tRegs, 'is_waitlist')) {
                 $pdo->exec("ALTER TABLE {$tRegs}
                     ADD COLUMN `is_waitlist` TINYINT(1) NOT NULL DEFAULT 0 AFTER `is_confirmed`,
@@ -180,12 +184,10 @@ class Updater
                     ADD COLUMN `confirmed_at` DATETIME NULL DEFAULT NULL AFTER `created_at`,
                     ADD COLUMN `history_log` TEXT NULL DEFAULT NULL AFTER `confirmed_at`");
 
-                // Für bestehende bestätigte Anmeldungen confirmed_at und initiales Protokoll füllen
                 $pdo->exec("UPDATE {$tRegs} SET `confirmed_at` = `created_at` WHERE `is_confirmed` = 1 AND `confirmed_at` IS NULL");
                 $pdo->exec("UPDATE {$tRegs} SET `history_log` = CONCAT(DATE_FORMAT(`created_at`, '%d.%m.%Y %H:%i:%s'), ' – Anmeldung im System eingegangen\n', IF(`is_confirmed` = 1, CONCAT(DATE_FORMAT(`created_at`, '%d.%m.%Y %H:%i:%s'), ' – E-Mail-Bestätigung erfolgt (Reguläre Teilnehmerliste)'), '')) WHERE `history_log` IS NULL");
             }
 
-            // 4. Neue E-Mail-Vorlage für "Wartelistenplatz bestätigen" (DE & EN) anlegen
             if (Database::getSetting('mail_tpl_waitlist_subject_de') === null) {
                 Database::setSetting('mail_tpl_waitlist_subject_de', 'Dein Wartelistenplatz für {conname}');
                 Database::setSetting(
@@ -197,6 +199,13 @@ class Updater
                     'mail_tpl_waitlist_body_en',
                     "<p>Hello {vorname} {nachname},</p><p>we confirm receipt of your registration for <b>{conname}</b> ({condatum}) in the group <b>{gruppe}</b>.</p><p>Since this participant group was already fully booked at the time of your email confirmation, you are currently on the <b>waiting list at position #{wartelistenplatz}</b>.</p><p>Please do not transfer any participation fee yet. As soon as a spot becomes available for you, we will contact you!</p><p>Best regards<br>The Organizers</p>"
                 );
+            }
+        }
+
+        if ($version === '0.9.004') {
+            $tUsers = Database::table('users');
+            if (self::columnExists($tUsers, 'totp_secret')) {
+                $pdo->exec("ALTER TABLE {$tUsers} MODIFY COLUMN `totp_secret` VARCHAR(255) NULL DEFAULT NULL");
             }
         }
     }

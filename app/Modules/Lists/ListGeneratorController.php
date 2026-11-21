@@ -123,20 +123,41 @@ class ListGeneratorController
             }
         }
 
-        // Alle bestätigten regulären Anmeldungen (oder bei Bedarf auch Warteliste) laden
+        // Alle bestätigten Anmeldungen dieser Veranstaltung laden
         $allRegs = array_filter(
             RegistrationRepository::allForEvent($eventId, $event['start_date']),
-            fn($r) => (int)$r['is_confirmed'] === 1 && (int)($r['is_waitlist'] ?? 0) === 0
+            fn($r) => (int)$r['is_confirmed'] === 1
         );
 
         $filteredRegs = [];
         foreach ($allRegs as $r) {
+            $isWaitlist      = (int)($r['is_waitlist'] ?? 0) === 1;
+            $isInternalGroup = (int)($r['group_show_in_reg'] ?? 1) === 0;
+
+            // Wartelisten-Filter: Standardmäßig nur reguläre Teilnehmer (außer "waitlist_only" oder "include_waitlist" ist gewählt)
+            if ($config['special_filter'] === 'waitlist_only') {
+                if (!$isWaitlist) {
+                    continue;
+                }
+            } elseif ($config['special_filter'] !== 'include_waitlist') {
+                if ($isWaitlist) {
+                    continue;
+                }
+            }
+
             if ($config['special_filter'] === 'under18' && !$r['is_under18']) {
                 continue;
             }
-            if ($config['group_id'] !== '' && (int)$r['group_id'] !== (int)$config['group_id']) {
+
+            // Gruppenfilter: Wenn "Alle Gruppen" ('') gewählt ist, interne Gruppen (wie "Absagen") ausschließen!
+            if ($config['group_id'] !== '') {
+                if ((int)$r['group_id'] !== (int)$config['group_id']) {
+                    continue;
+                }
+            } elseif ($isInternalGroup) {
                 continue;
             }
+
             if ($config['payment_status'] === 'paid' && (int)$r['is_fully_paid'] !== 1) {
                 continue;
             }
@@ -324,21 +345,27 @@ class ListGeneratorController
 
                     <div class="grid-3">
                         <div class="form-group">
-                            <label>Spezialfilter (Altersprüfung)</label>
+                            <label>Spezialfilter (Altersprüfung & Warteliste)</label>
                             <select name="special_filter">
-                                <option value="">— Alle Altersgruppen —</option>
+                                <option value="">— Reguläre Teilnehmer (alle Altersgruppen) —</option>
                                 <option value="under18" <?= $config['special_filter'] === 'under18' ? 'selected' : '' ?>>
                                     🔞 Nur Minderjährige (unter 18 zum Con-Start am <?= e(format_date($event['start_date'])) ?>)
+                                </option>
+                                <option value="waitlist_only" <?= $config['special_filter'] === 'waitlist_only' ? 'selected' : '' ?>>
+                                    📋 Nur Wartelisten-Anmeldungen
+                                </option>
+                                <option value="include_waitlist" <?= $config['special_filter'] === 'include_waitlist' ? 'selected' : '' ?>>
+                                    👥 Reguläre Teilnehmer + Warteliste zusammen
                                 </option>
                             </select>
                         </div>
                         <div class="form-group">
                             <label>Teilnehmergruppe</label>
                             <select name="group_id">
-                                <option value="">— Alle Gruppen —</option>
+                                <option value="">— Alle aktiven Gruppen (ohne interne Gruppen) —</option>
                                 <?php foreach ($groups as $g): ?>
                                     <option value="<?= (int)$g['id'] ?>" <?= (string)$config['group_id'] === (string)$g['id'] ? 'selected' : '' ?>>
-                                        <?= e($g['name_de']) ?>
+                                        <?= e($g['name_de']) ?><?= (int)($g['show_in_registration'] ?? 1) === 0 ? ' (Interne Gruppe)' : '' ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
