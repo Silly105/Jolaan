@@ -90,7 +90,7 @@ class Theme
                 'themes' => [],
             ],
             'genre' => [
-                'label'  => 'Aufwändige Genre- & Erlebnis-Themes (mit Texturen & Ornamentik)',
+                'label'  => 'Genre-Themes',
                 'themes' => [],
             ],
         ];
@@ -207,7 +207,16 @@ class Theme
                 'accent_light'  => '#c2a675',
                 'body_bg'       => '#eff1ec',
             ],
-            default => [ // western-seal ("Western Forest (Waldgrün)")
+            'royal-ball' => [
+                'sidebar_bg'    => '#2b0912',
+                'sidebar_dark'  => '#1c050b',
+                'accent'        => '#8c1428',
+                'accent_hover'  => '#6b0e1e',
+                'accent_border' => '#d4af37',
+                'accent_light'  => '#f3d26b',
+                'body_bg'       => '#faf6f4',
+            ],
+            default => [ // western-seal & celtic-seal ("Waldgrün / Keltensiegel")
                 'sidebar_bg'    => '#1e2e22',
                 'sidebar_dark'  => '#162219',
                 'accent'        => '#255E00',
@@ -271,8 +280,10 @@ class Theme
             $headerLogo = $globalLogo;
         }
 
-        $themeCssUrl = 'themes/' . rawurlencode($activeTheme) . '/style.css';
-        $layoutFile = self::themesDir() . '/' . $activeTheme . '/layout.php';
+        $verParam    = rawurlencode(Version::CURRENT);
+        $baseCssUrl  = 'themes/base.css?v=' . $verParam;
+        $themeCssUrl = 'themes/' . rawurlencode($activeTheme) . '/style.css?v=' . $verParam;
+        $layoutFile  = self::themesDir() . '/' . $activeTheme . '/layout.php';
 
         if (is_file($layoutFile)) {
             require $layoutFile;

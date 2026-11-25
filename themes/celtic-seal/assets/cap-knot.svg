@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 44" width="140" height="44" fill="none">
+  <!-- Geflochtener keltischer Bandknoten für die Moosgrün-Kopfzeilen -->
+  <g opacity="0.72">
+    <path d="M4,8 C28,8 34,36 58,36 C82,36 88,12 128,22 C88,32 82,8 58,8 C34,8 28,36 4,36 Z" stroke="#3f5729" stroke-width="5.6" stroke-linejoin="round"/>
+    <path d="M4,8 C28,8 34,36 58,36 C82,36 88,12 128,22 C88,32 82,8 58,8 C34,8 28,36 4,36 Z" stroke="#8fb070" stroke-width="2.6" stroke-linejoin="round"/>
+    <circle cx="31" cy="22" r="9" stroke="#3f5729" stroke-width="5"/>
+    <circle cx="31" cy="22" r="9" stroke="#8fb070" stroke-width="2.2"/>
+    <circle cx="72" cy="22" r="8" stroke="#3f5729" stroke-width="4.8"/>
+    <circle cx="72" cy="22" r="8" stroke="#8fb070" stroke-width="2.1"/>
+  </g>
+</svg>

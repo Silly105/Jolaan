@@ -23,6 +23,7 @@ $bannerImage = $bannerImage ?? '';
     <?php if (!empty($faviconUrl)): ?>
         <link rel="icon" href="<?= e($faviconUrl) ?>">
     <?php endif; ?>
+    <link rel="stylesheet" href="<?= e($baseCssUrl ?? ('themes/base.css?v=' . \App\Core\Version::CURRENT)) ?>">
     <link rel="stylesheet" href="<?= e($themeCssUrl) ?>">
 </head>
 <body class="theme-<?= e($activeTheme) ?> header-mode-<?= e($headerMode) ?>">

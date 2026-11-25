@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" fill="none">
+  <!-- Dreieckiger keltischer Flechtknoten in sanftem Salbei/Oliv für die Innenecken -->
+  <g opacity="0.52">
+    <path d="M8,8 L54,8 C36,16 26,26 8,54 Z" stroke="#7c9659" stroke-width="5.2" stroke-linejoin="round"/>
+    <path d="M8,8 L54,8 C36,16 26,26 8,54 Z" stroke="#e2f1c1" stroke-width="2.6" stroke-linejoin="round"/>
+    <path d="M15,15 C32,14 34,26 20,34 C14,38 14,24 25,19 C34,15 39,21 29,29" stroke="#7c9659" stroke-width="4.6" stroke-linecap="round"/>
+    <path d="M15,15 C32,14 34,26 20,34 C14,38 14,24 25,19 C34,15 39,21 29,29" stroke="#e2f1c1" stroke-width="2.1" stroke-linecap="round"/>
+  </g>
+</svg>

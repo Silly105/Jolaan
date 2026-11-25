@@ -5,7 +5,7 @@ namespace App\Core;
 
 class Version
 {
-    public const CURRENT = '0.9.006';
+    public const CURRENT = '0.9.007';
 
     /**
      * Fortlaufende Änderungshistorie & Migrations-Schritte.
@@ -98,6 +98,16 @@ class Version
                     'Drei wählbare Header-Modi (global einstellbar und pro Veranstaltung überschreibbar): Kompakte Kopfleiste, Zentrierter Wappen-/Banner-Header und Großer Hero-Header',
                     'Neues optionales, individuelles Veranstaltungs-Bannerbild (Upload in den Con-Einstellungen), das in voller Formularbreite direkt oberhalb des Einführungstextes über der Anmeldung angezeigt wird',
                     'Übersichtliche Gruppierung der Theme-Auswahl in „Schlichte Farb-Themes“ und „Aufwändige Genre- & Erlebnis-Themes“',
+                ],
+            ],
+            '0.9.007' => [
+                'date'    => '2026-11-25',
+                'title'   => 'Neue Genre-Themes „Keltensiegel“ & „Tanzball“, CSS-Cache-Busting & UI-Feinschliff',
+                'changes' => [
+                    'Neues Genre-Theme „Keltensiegel“ (moderne Neuinterpretation des klassischen Keltenknoten-Designs mit Wasserzeichen-Hintergrund, Moosgrün-Verläufen und geflochtenen keltischen SVG-Ornamenten)',
+                    'Neues Genre-Theme „Tanzball“ (höfisches Fantasy-/Mittelalter-Ball-Design in Samtrot, Weiß und Blattgold mit Brokat-Hintergrund, Wappen-Ornamentik und goldener Kronen-Zierlinie)',
+                    'Automatisches CSS-Cache-Busting (?v=...) für base.css und Theme-Stylesheets sowie abgesicherte Positionierung der Eck-Ornamente eingebaut',
+                    'Kategorie-Überschrift in den Theme-Auswahlmenüs auf „Genre-Themes“ gekürzt und Emojis in der Info-Box über dem Anmeldeformular entfernt',
                 ],
             ],
         ];

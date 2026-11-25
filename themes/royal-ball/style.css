@@ -1,0 +1,148 @@
+:root {
+    --font-heading: "Palatino Linotype", "Book Antiqua", Georgia, "Times New Roman", serif;
+    --font-body: Georgia, "Segoe UI", serif;
+    --bg-body: #590a17;
+    --bg-pattern: radial-gradient(ellipse at 50% 18%, rgba(212, 175, 55, 0.14) 0%, rgba(42, 4, 11, 0.65) 85%), url('assets/bg.jpg');
+    --bg-size: auto, 720px auto;
+    --bg-attachment: fixed;
+    --text-color: #241317;
+    --text-muted: #664950;
+    --accent: #8c1428;
+    --accent-hover: #630b1a;
+    --accent-border: #d4af37;
+    --header-bg: #4d0814;
+    --header-text: #fffdf7;
+    --nav-bg: #6b0d1e;
+    --nav-link: #fae8b4;
+    --card-bg: #fffdf9;
+    --card-border: #c99e2c;
+    --card-header-bg: #7d1123;
+    --card-header-text: #fffdf7;
+    --banner-bg: #fdf6e7;
+    --item-bg: #ffffff;
+    --badge-bg: #fdf4df;
+    --badge-text: #7d1123;
+    --input-bg: #ffffff;
+    --input-text: #211115;
+    --input-border: #d4be8d;
+    --input-radius: 3px;
+    --focus-ring: rgba(201, 158, 44, 0.3);
+    --btn-bg: #8c1428;
+    --btn-hover: #690c1c;
+    --btn-text: #fffdf7;
+    --btn-sec-bg: #fffdf9;
+    --btn-sec-text: #7d1123;
+    --btn-sec-hover: #fbf0d9;
+    --btn-radius: 3px;
+    --radius: 4px;
+}
+
+.site-header {
+    background: linear-gradient(180deg, #3d050f 0%, #630c1c 100%);
+    border-bottom: 4px double #d4af37;
+    box-shadow: 0 8px 26px rgba(0, 0, 0, 0.55);
+}
+
+.brand-title {
+    letter-spacing: 0.06em;
+    color: #fffaf0;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
+}
+
+.brand-subtitle {
+    color: #f0d58c;
+    font-style: italic;
+    letter-spacing: 0.03em;
+}
+
+.top-nav {
+    background: linear-gradient(90deg, #570917 0%, #781022 50%, #570917 100%);
+    border-top: 1px solid rgba(212, 175, 55, 0.55);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.35);
+}
+
+.event-top-banner-wrap {
+    border: 2px solid #d4af37;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+}
+
+.event-header-banner {
+    background: linear-gradient(180deg, #fffdf8 0%, #fbf2de 100%);
+    border: 1px solid #d4af37;
+    border-left: 5px solid #8c1428;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.32);
+}
+
+/* Strahlend weiße höfische Ballkarte mit doppelter Blattgold-Einfassung */
+.content-card {
+    position: relative;
+    background: radial-gradient(ellipse at center, #ffffff 60%, #fcf6e8 100%);
+    border: 2px solid #c99e2c;
+    outline: 1px solid rgba(201, 158, 44, 0.55);
+    outline-offset: -9px;
+    box-shadow: 0 16px 42px rgba(32, 2, 8, 0.6), inset 0 0 28px rgba(212, 175, 55, 0.08);
+}
+
+.card-ornament {
+    display: block;
+    position: absolute;
+    pointer-events: none;
+    z-index: 3;
+    width: 50px;
+    height: 50px;
+    background: url('assets/corner-heraldic.svg') no-repeat center / contain;
+}
+.card-ornament-tl { top: 4px; left: 4px; }
+.card-ornament-tr { top: 4px; right: 4px; transform: scaleX(-1); }
+.card-ornament-bl { bottom: 4px; left: 4px; transform: scaleY(-1); }
+.card-ornament-br { bottom: 4px; right: 4px; transform: scale(-1, -1); }
+
+.card-header {
+    background: linear-gradient(180deg, #8c1428 0%, #5e0a18 100%);
+    border-bottom: 3px double #d4af37;
+    text-align: center;
+    padding: 1.2rem 2.25rem;
+}
+
+.card-header h1 {
+    letter-spacing: 0.05em;
+    color: #fffdf7;
+    text-shadow: 0 2px 5px rgba(0, 0, 0, 0.45);
+}
+
+.card-body {
+    padding: 1.85rem 2.1rem;
+}
+
+.event-item {
+    background: #ffffff;
+    border: 1px solid #dec068;
+    box-shadow: inset 0 0 0 3px #fffdf9, inset 0 0 0 4px rgba(212, 175, 55, 0.35), 0 4px 12px rgba(90, 10, 24, 0.07);
+}
+
+.seat-badge {
+    border: 1px solid #d4af37;
+}
+
+.form-section-heading {
+    letter-spacing: 0.04em;
+    color: #8c1428;
+    border-bottom: none;
+    padding-bottom: 1.45rem;
+    background: url('assets/divider-crown.svg') no-repeat left bottom / 330px 24px;
+}
+
+.btn-primary {
+    background: linear-gradient(180deg, #9b172d 0%, #6e0d1d 100%);
+    border: 1px solid #d4af37;
+    box-shadow: inset 0 0 0 1px rgba(255, 238, 186, 0.35), 0 3px 8px rgba(90, 10, 24, 0.32);
+    letter-spacing: 0.04em;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(180deg, #7d1123 0%, #520713 100%);
+}
+
+.btn-secondary {
+    border: 1px solid #c99e2c;
+}

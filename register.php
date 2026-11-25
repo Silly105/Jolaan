@@ -356,13 +356,13 @@ ob_start();
     <div class="doc-box" style="margin-bottom:1.25rem;">
         <?php if ($orgaContactEmail !== ''): ?>
             <div style="margin-bottom:<?= $storageNotice !== '' ? '0.5rem' : '0' ?>;">
-                ✉️ <strong><?= e(I18n::t('reg.contact_prefix')) ?></strong>
+                <strong><?= e(I18n::t('reg.contact_prefix')) ?></strong>
                 <a href="mailto:<?= e($orgaContactEmail) ?>" style="font-weight:700;"><?= e($orgaContactEmail) ?></a>
             </div>
         <?php endif; ?>
         <?php if ($storageNotice !== ''): ?>
             <div style="font-size:0.86rem;color:var(--text-muted);">
-                🛡️ <?= nl2br(e($storageNotice)) ?>
+                <?= nl2br(e($storageNotice)) ?>
             </div>
         <?php endif; ?>
     </div>

@@ -1,0 +1,216 @@
+:root {
+    --font-heading: Georgia, "Book Antiqua", "Palatino Linotype", serif;
+    --font-body: Verdana, "Segoe UI", Tahoma, sans-serif;
+    --bg-body: #eaf7cb;
+    --bg-pattern: url('assets/bg.jpg');
+    --bg-size: 560px auto;
+    --bg-attachment: scroll;
+    --text-color: #182616;
+    --text-muted: #4a633b;
+    --accent: #255E00;
+    --accent-hover: #183e00;
+    --accent-border: #618142;
+    --header-bg: #6b894c;
+    --header-text: #1c2919;
+    --nav-bg: #8eb070;
+    --nav-link: #1f2e1c;
+    --card-bg: #f1fbe0;
+    --card-border: #618142;
+    --card-header-bg: #6f8e50;
+    --card-header-text: #1b2618;
+    --banner-bg: #e3f2c2;
+    --item-bg: #f6fdeb;
+    --badge-bg: #dceec0;
+    --badge-text: #255E00;
+    --input-bg: #e5efe0;
+    --input-text: #142012;
+    --input-border: #618142;
+    --input-radius: 3px;
+    --focus-ring: rgba(37, 94, 0, 0.22);
+    --btn-bg: #6b8c4c;
+    --btn-hover: #537038;
+    --btn-text: #ffffff;
+    --btn-sec-bg: #e3f0cf;
+    --btn-sec-text: #243b20;
+    --btn-sec-hover: #d2e6b5;
+    --btn-radius: 3px;
+    --radius: 4px;
+}
+
+/* Klassischer Keltensiegel-Seitenkopf mit Moosgrün-Verlauf & Rahmen */
+.site-header {
+    background: linear-gradient(180deg, #dceeb7 0%, #bdd894 100%);
+    color: #1f2e1b;
+    border-top: 2px solid #618142;
+    border-bottom: 2px solid #526e36;
+    box-shadow: 0 3px 10px rgba(45, 72, 24, 0.16);
+}
+
+.brand-link, .brand-link:hover {
+    color: #1f3318;
+}
+
+.brand-title {
+    color: #213817;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.7);
+    letter-spacing: 0.03em;
+}
+
+.brand-subtitle {
+    color: #3d592c;
+}
+
+.lang-switch {
+    background: rgba(74, 102, 46, 0.18);
+    border: 1px solid #618142;
+}
+
+.lang-pill {
+    color: #1f3318;
+}
+
+.lang-pill.active, .lang-pill:hover {
+    background: #557339;
+    color: #ffffff;
+}
+
+/* Subheader-Navigationsleiste im klassischen Salbei-Moos-Verlauf mit keltischen Endknoten */
+.top-nav {
+    background:
+        url('assets/cap-knot.svg') no-repeat left 8px center / 92px 28px,
+        linear-gradient(180deg, #a7c58a 0%, #739454 100%);
+    border-top: 1px solid #618142;
+}
+
+.nav-links a {
+    color: #1e2d1b;
+    font-weight: 700;
+    font-size: 0.88rem;
+}
+
+.nav-links a:hover {
+    color: #0d1a0a;
+    text-decoration: underline;
+}
+
+.nav-login, .nav-badge {
+    background: rgba(36, 59, 32, 0.16);
+    border: 1px solid #4e6b34;
+    color: #182615;
+}
+
+.nav-login:hover, .nav-badge:hover {
+    background: #4e6b34;
+    color: #ffffff;
+}
+
+.event-top-banner-wrap {
+    border: 2px solid #618142;
+    box-shadow: 0 4px 12px rgba(45, 72, 24, 0.18);
+}
+
+.event-header-banner {
+    background: #e4f3c4;
+    border: 1px solid #618142;
+    border-left: 5px solid #4e6b34;
+}
+
+/* Hauptkarte mit Moosgrün-Rahmen, geflochtenen Kopf-Ornamenten & inneren Eckknoten */
+.content-card {
+    position: relative;
+    background: linear-gradient(180deg, #f3fce3 0%, #eaf7cb 100%);
+    border: 1px solid #618142;
+    box-shadow: 0 5px 18px rgba(42, 68, 22, 0.14);
+}
+
+.card-ornament {
+    display: block;
+    position: absolute;
+    pointer-events: none;
+    z-index: 2;
+    width: 54px;
+    height: 54px;
+    background: url('assets/corner-knot.svg') no-repeat center / contain;
+}
+/* Unterhalb der 48px hohen Kopfzeile in den oberen Ecken des Karten-Inhalts + unten in den Ecken */
+.card-ornament-tl { top: 52px; left: 4px; }
+.card-ornament-tr { top: 52px; right: 4px; transform: scaleX(-1); }
+.card-ornament-bl { bottom: 4px; left: 4px; transform: scaleY(-1); }
+.card-ornament-br { bottom: 4px; right: 4px; transform: scale(-1, -1); }
+
+.card-header {
+    background:
+        url('assets/cap-knot.svg') no-repeat left 10px center / 115px 36px,
+        linear-gradient(180deg, #a2c085 0%, #617d43 100%);
+    border-bottom: 1px solid #4d6633;
+    text-align: center;
+    padding: 0.85rem 8rem;
+}
+
+.card-header::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 10px;
+    bottom: 0;
+    width: 115px;
+    background: url('assets/cap-knot.svg') no-repeat center / 115px 36px;
+    transform: scaleX(-1);
+    pointer-events: none;
+}
+
+.card-header h1 {
+    color: #1c2919;
+    text-shadow: 0 1px 0 rgba(235, 248, 212, 0.55);
+    font-size: 1.28rem;
+}
+
+.card-body {
+    padding: 1.65rem 1.85rem;
+}
+
+.event-item {
+    background: #f6fdeb;
+    border: 1px solid #618142;
+    box-shadow: inset 0 0 0 2px #eaf7cb;
+}
+
+.form-section-heading {
+    color: #255E00;
+    border-bottom: none;
+    padding-bottom: 1.15rem;
+    background: url('assets/divider-celtic.svg') no-repeat left bottom / 320px 18px;
+}
+
+.btn-primary {
+    background: linear-gradient(180deg, #87ab66 0%, #526e36 100%);
+    border: 1px solid #3f5728;
+    color: #ffffff;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.btn-primary:hover {
+    background: linear-gradient(180deg, #739757 0%, #3f5728 100%);
+}
+
+.site-footer {
+    background: linear-gradient(180deg, #9ebd81 0%, #6c8a4e 100%);
+    color: #1e2d1b;
+    border-top: 1px solid #526e36;
+}
+
+.footer-links a {
+    color: #1b2e16;
+    font-weight: 600;
+}
+
+@media (max-width: 640px) {
+    .card-header {
+        padding: 0.85rem 1.25rem;
+        background: linear-gradient(180deg, #a2c085 0%, #617d43 100%);
+    }
+    .card-header::after {
+        display: none;
+    }
+}

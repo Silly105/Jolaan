@@ -1,5 +1,3 @@
-@import url('../base.css');
-
 :root {
     --font-heading: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
     --font-body: Georgia, "Segoe UI", serif;
@@ -77,6 +75,7 @@
 }
 
 .content-card {
+    position: relative;
     background: radial-gradient(ellipse at center, #f7f5eb 52%, #e3dfd0 100%);
     border: 2px solid #78633e;
     outline: 1px solid rgba(29, 68, 61, 0.42);
@@ -86,6 +85,9 @@
 
 .card-ornament {
     display: block;
+    position: absolute;
+    pointer-events: none;
+    z-index: 3;
     width: 50px;
     height: 50px;
     background: url('assets/corner-eldritch.svg') no-repeat center / contain;
