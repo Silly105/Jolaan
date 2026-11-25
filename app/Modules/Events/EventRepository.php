@@ -136,11 +136,12 @@ class EventRepository
             $isRequired  = $isOrgaOnly === 1 ? 0 : ((int)$f['is_required'] === 1 ? 1 : 0);
             $isSensitive = (int)($f['is_sensitive'] ?? 0) === 1 ? 1 : 0;
             $isEncrypted = $isSensitive === 1 ? 1 : ((int)($f['is_encrypted'] ?? 0) === 1 ? 1 : 0);
+            $keepPrefill = $isOrgaOnly === 1 ? 0 : ((int)($f['keep_on_prefill'] ?? 0) === 1 ? 1 : 0);
 
             Database::query(
                 "INSERT INTO {$tFields}
-                 (event_id, field_key, field_type, label_de, label_en, help_de, help_en, options_json, is_required, is_encrypted, is_sensitive, is_orga_only, system_mapping, sort_order)
-                 VALUES (:eid, :fkey, :ftype, :lde, :len, :hde, :hen, :opt, :req, :enc, :sens, :orga, :map, :sort)",
+                 (event_id, field_key, field_type, label_de, label_en, help_de, help_en, options_json, is_required, is_encrypted, is_sensitive, is_orga_only, keep_on_prefill, system_mapping, sort_order)
+                 VALUES (:eid, :fkey, :ftype, :lde, :len, :hde, :hen, :opt, :req, :enc, :sens, :orga, :pref, :map, :sort)",
                 [
                     'eid'   => $targetEventId,
                     'fkey'  => $f['field_key'],
@@ -154,6 +155,7 @@ class EventRepository
                     'enc'   => $isEncrypted,
                     'sens'  => $isSensitive,
                     'orga'  => $isOrgaOnly,
+                    'pref'  => $keepPrefill,
                     'map'   => $f['system_mapping'],
                     'sort'  => (int)$f['sort_order'],
                 ]

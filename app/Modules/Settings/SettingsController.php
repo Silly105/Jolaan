@@ -7,6 +7,8 @@ use App\Core\Auth;
 use App\Core\Config;
 use App\Core\Crypto;
 use App\Core\Database;
+use App\Core\Mailer;
+use App\Core\QrCode;
 use App\Core\Theme;
 use App\Core\Totp;
 use App\Core\Updater;
@@ -26,6 +28,29 @@ class SettingsController
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             Auth::requireCsrf();
             $subAction = (string)($_POST['sub_action'] ?? 'save_general');
+
+            if ($subAction === 'send_test_mail') {
+                $testTo = trim((string)($_POST['test_mail_to'] ?? ''));
+                if (!filter_var($testTo, FILTER_VALIDATE_EMAIL)) {
+                    $_SESSION['flash_error'] = 'Bitte gib eine gültige Empfänger-E-Mail-Adresse für die Test-E-Mail an.';
+                } else {
+                    $siteTitle = (string)Database::getSetting('site_title', 'Con-Management');
+                    $transport = (string)Database::getSetting('mail_transport', 'mail');
+                    $modeLabel = ($transport === 'smtp') ? 'Externer SMTP-Server (' . Database::getSetting('smtp_host', '') . ')' : 'Eigener Webserver (PHP mail())';
+                    $subj = "Test-E-Mail von {$siteTitle}";
+                    $body = "<p>Hallo,</p><p>dies ist eine automatische Test-E-Mail aus den Seiteneinstellungen von <b>" . e($siteTitle) . "</b>.</p>"
+                          . "<ul><li><b>Versandart:</b> " . e($modeLabel) . "</li>"
+                          . "<li><b>Zeitpunkt:</b> " . date('d.m.Y H:i:s') . "</li></ul>"
+                          . "<p>Der E-Mail-Versand funktioniert einwandfrei!</p>";
+                    if (Mailer::send($testTo, $subj, $body)) {
+                        $_SESSION['flash_success'] = "Test-E-Mail wurde erfolgreich über „{$modeLabel}“ an {$testTo} versendet!";
+                    } else {
+                        $_SESSION['flash_error'] = 'Test-E-Mail konnte nicht gesendet werden: ' . Mailer::getLastError();
+                    }
+                }
+                header('Location: admin.php?module=settings');
+                exit;
+            }
 
             if ($subAction === 'move_secret_key') {
                 // Schlüsseldatei an einen benutzerdefinierten Pfad (z. B. außerhalb des html-root) verschieben
@@ -83,7 +108,7 @@ class SettingsController
                 }
             }
             if (!empty($_POST['smtp_pass'])) {
-                Database::setSetting('smtp_pass', (string)$_POST['smtp_pass']);
+                Database::setSetting('smtp_pass', Crypto::encrypt((string)$_POST['smtp_pass']));
             }
 
             $uploadErrors = [];
@@ -155,7 +180,7 @@ class SettingsController
             <input type="hidden" name="sub_action" value="save_general">
 
             <div class="card">
-                <div class="card-header"><h2>🎨 Globales Theme, Favicon & Seiten-Header</h2></div>
+                <div class="card-header"><h2>Globales Theme, Favicon & Seiten-Header</h2></div>
                 <div class="card-body">
                     <div class="grid-2">
                         <div class="form-group">
@@ -268,8 +293,11 @@ class SettingsController
             </div>
 
             <div class="card">
-                <div class="card-header"><h2>📧 E-Mail-Versand & SMTP</h2></div>
+                <div class="card-header"><h2>E-Mail-Versand & SMTP</h2></div>
                 <div class="card-body">
+                    <div class="alert" style="background:#f8fafc;border:1px solid #cbd5e1;color:#334155;font-size:0.88rem;margin-bottom:1.1rem;">
+                        <strong>Hinweis zum E-Mail-Versand:</strong> Ohne Angabe eines externen SMTP-Servers („Standard PHP-Mail“) werden alle System-E-Mails automatisch direkt über den lokalen Maildienst deines eigenen Webservers verschickt. Das funktioniert sofort, solange die Absender-E-Mail-Adresse zu deiner gehosteten Domain gehört. Einen externen SMTP-Server benötigst du nur, wenn du über ein externes Postfach (z. B. mit eigener DKIM-Signatur oder fremder Domain) senden möchtest.
+                    </div>
                     <div class="grid-3">
                         <div class="form-group">
                             <label>Absender-E-Mail-Adresse</label>
@@ -282,14 +310,14 @@ class SettingsController
                         <div class="form-group">
                             <label>Versandart</label>
                             <select name="mail_transport">
-                                <option value="mail" <?= Database::getSetting('mail_transport', 'mail') === 'mail' ? 'selected' : '' ?>>Standard PHP-Mail (Shared Hosting Standard)</option>
-                                <option value="smtp" <?= Database::getSetting('mail_transport', 'mail') === 'smtp' ? 'selected' : '' ?>>Eigener SMTP-Server</option>
+                                <option value="mail" <?= Database::getSetting('mail_transport', 'mail') === 'mail' ? 'selected' : '' ?>>Eigener Webserver (Standard PHP-Mail)</option>
+                                <option value="smtp" <?= Database::getSetting('mail_transport', 'mail') === 'smtp' ? 'selected' : '' ?>>Externer SMTP-Server</option>
                             </select>
                         </div>
                     </div>
                     <div class="grid-3">
                         <div class="form-group">
-                            <label>SMTP-Host (falls SMTP)</label>
+                            <label>SMTP-Host (nur bei externem SMTP-Server)</label>
                             <input type="text" name="smtp_host" value="<?= e(Database::getSetting('smtp_host', '')) ?>">
                         </div>
                         <div class="form-group">
@@ -311,7 +339,7 @@ class SettingsController
                             <input type="text" name="smtp_user" value="<?= e(Database::getSetting('smtp_user', '')) ?>" autocomplete="off">
                         </div>
                         <div class="form-group">
-                            <label>SMTP-Passwort (leer lassen, um bestehendes beizubehalten)</label>
+                            <label>SMTP-Passwort (wird AES-256-GCM verschlüsselt gespeichert; leer lassen = unverändert)</label>
                             <input type="password" name="smtp_pass" placeholder="••••••••" autocomplete="new-password">
                         </div>
                     </div>
@@ -323,10 +351,33 @@ class SettingsController
             </div>
         </form>
 
+        <!-- Test-E-Mail senden -->
+        <div class="card">
+            <div class="card-header">
+                <h2>Test-E-Mail senden</h2>
+            </div>
+            <div class="card-body">
+                <p style="margin-top:0;font-size:0.9rem;color:#475569;">
+                    Hier kannst du prüfen, ob der E-Mail-Versand mit den aktuell gespeicherten Einstellungen (eigener Webserver oder externer SMTP-Server) funktioniert.
+                </p>
+                <form method="post" action="admin.php?module=settings">
+                    <?= Auth::csrfField() ?>
+                    <input type="hidden" name="sub_action" value="send_test_mail">
+                    <div class="form-group" style="max-width:540px;margin-bottom:0;">
+                        <label for="test_mail_to">Empfänger-E-Mail-Adresse für die Testmail</label>
+                        <div style="display:flex;gap:0.6rem;">
+                            <input type="email" id="test_mail_to" name="test_mail_to" value="<?= e(Auth::user()['email'] ?? '') ?>" placeholder="deine-adresse@beispiel.de" required>
+                            <button type="submit" class="btn btn-secondary" style="white-space:nowrap;">✉️ Test-E-Mail jetzt senden</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
         <!-- Speicherort der AES-256 Schlüsseldatei (secret.key) anpassen -->
         <div class="card">
             <div class="card-header">
-                <h2>🔐 Speicherort der Verschlüsselungs-Schlüsseldatei (<code>secret.key</code>)</h2>
+                <h2>Speicherort der Verschlüsselungs-Schlüsseldatei (<code>secret.key</code>)</h2>
             </div>
             <div class="card-body">
                 <p style="margin-top:0;font-size:0.9rem;color:#475569;">
@@ -393,14 +444,14 @@ class SettingsController
         ob_start();
         ?>
         <div class="alert" style="background:#eff6ff;border:1px solid #93c5fd;color:#1e3a8a;">
-            💡 <strong>Verfügbare Platzhalter:</strong> <code>{vorname}</code>, <code>{nachname}</code>, <code>{conname}</code>, <code>{condatum}</code>, <code>{gruppe}</code>, <code>{betrag}</code>, <code>{link}</code>, <code>{wartelistenplatz}</code> (HTML ist erlaubt).
+            <strong>Verfügbare Platzhalter:</strong> <code>{vorname}</code>, <code>{nachname}</code>, <code>{conname}</code>, <code>{condatum}</code>, <code>{gruppe}</code>, <code>{betrag}</code>, <code>{link}</code>, <code>{wartelistenplatz}</code> (HTML ist erlaubt).
         </div>
 
         <form method="post" action="admin.php?module=mailtemplates">
             <?= Auth::csrfField() ?>
             <?php foreach ($templates as $tKey => $tTitle): ?>
                 <div class="card">
-                    <div class="card-header"><h2>✉️ <?= e($tTitle) ?></h2></div>
+                    <div class="card-header"><h2><?= e($tTitle) ?></h2></div>
                     <div class="card-body">
                         <div class="grid-2">
                             <div>
@@ -494,7 +545,7 @@ class SettingsController
         ob_start();
         ?>
         <div class="card">
-            <div class="card-header"><h2>🔑 SL- & Administrator-Konten</h2></div>
+            <div class="card-header"><h2>SL- & Administrator-Konten</h2></div>
             <div class="card-body table-responsive">
                 <p style="margin-top:0;font-size:0.88rem;color:#475569;">
                     <strong>Rollen-Konzept</strong> –
@@ -555,7 +606,7 @@ class SettingsController
         </div>
 
         <div class="card">
-            <div class="card-header"><h2>➕ Neuen Backend-Benutzer anlegen</h2></div>
+            <div class="card-header"><h2>Neuen Backend-Benutzer anlegen</h2></div>
             <div class="card-body">
                 <form method="post" action="admin.php?module=users" autocomplete="off">
                     <?= Auth::csrfField() ?>
@@ -700,7 +751,7 @@ class SettingsController
         <?php if (is_array($freshBackupCodes) && !empty($freshBackupCodes)): ?>
             <div class="card" style="border:2px solid #16a34a;background:#f0fdf4;">
                 <div class="card-header" style="background:#dcfce7;">
-                    <h2 style="color:#166534;">🚨 WICHTIG – Deine 8 persönlichen Einmal-Notfallcodes (Backup-Codes)</h2>
+                    <h2 style="color:#166534;">WICHTIG – Deine 8 persönlichen Einmal-Notfallcodes (Backup-Codes)</h2>
                 </div>
                 <div class="card-body">
                     <p style="margin-top:0;color:#166534;">
@@ -719,7 +770,7 @@ class SettingsController
         <div class="grid-2">
             <!-- Passwort ändern -->
             <div class="card">
-                <div class="card-header"><h2>🔒 Eigenes Passwort ändern</h2></div>
+                <div class="card-header"><h2>Eigenes Passwort ändern</h2></div>
                 <div class="card-body">
                     <form method="post" action="admin.php?module=profile">
                         <?= Auth::csrfField() ?>
@@ -744,7 +795,7 @@ class SettingsController
             <!-- Zwei-Faktor-Authentifizierung (TOTP) -->
             <div class="card">
                 <div class="card-header">
-                    <h2>🔐 Zwei-Faktor-Authentifizierung (2FA / TOTP)</h2>
+                    <h2>Zwei-Faktor-Authentifizierung (2FA / TOTP)</h2>
                     <?php if ($is2faEnabled): ?>
                         <span class="badge badge-green">Aktiviert</span>
                     <?php else: ?>
@@ -754,7 +805,7 @@ class SettingsController
                 <div class="card-body">
                     <?php if ($is2faEnabled): ?>
                         <p style="margin-top:0;color:#166534;font-weight:600;">
-                            ✅ Dein Account ist durch Zwei-Faktor-Authentifizierung geschützt.
+                            Dein Account ist durch Zwei-Faktor-Authentifizierung geschützt.
                         </p>
                         <p style="font-size:0.88rem;color:#475569;">
                             Verbleibende Einmal-Notfallcodes: <strong><?= $remainingBackups ?> von 8</strong>.<br>
@@ -771,22 +822,28 @@ class SettingsController
                         </form>
                     <?php else: ?>
                         <p style="margin-top:0;font-size:0.88rem;color:#475569;">
-                            Schütze deinen Account mit einer Authenticator-App (z. B. <em>Google Authenticator, Aegis, Bitwarden, 1Password, Apple Passwörter</em>). Es werden <strong>keine externen Dienste</strong> eingebunden.
+                            Schütze deinen Account mit einer Authenticator-App (z. B. <em>Google Authenticator, Aegis, Bitwarden, 1Password, Apple Passwörter</em>). Der QR-Code wird lokal auf deinem Server erzeugt – es werden <strong>keine externen Dienste</strong> eingebunden.
                         </p>
-                        <div class="form-group">
-                            <label for="totp_secret_input">Einrichtungsschlüssel (Base32) in deiner Authenticator-App eintragen</label>
-                            <div class="copy-input-wrap">
-                                <input type="text" id="totp_secret_input" readonly value="<?= e($setupSecret) ?>" onclick="this.select()" style="font-family:monospace;font-weight:700;">
-                                <button type="button" class="copy-icon-btn" onclick="copyInputToClipboard('totp_secret_input', this)" title="Schlüssel kopieren">📋</button>
+                        <div style="display:flex;gap:1.25rem;align-items:center;flex-wrap:wrap;margin-bottom:1rem;background:#f8fafc;padding:0.9rem;border-radius:8px;border:1px solid #e2e8f0;">
+                            <div>
+                                <?= QrCode::renderSvg($otpUri, 168, 2) ?>
                             </div>
-                            <div class="help-text">Typ: Zeitbasiert (TOTP, 6 Ziffern, 30 Sek.) &middot; <a href="<?= e($otpUri) ?>">Direktlink für Passwort-Manager (otpauth://)</a></div>
+                            <div style="flex:1;min-width:220px;">
+                                <div style="font-weight:600;font-size:0.88rem;margin-bottom:0.35rem;color:#0f172a;">1. QR-Code mit Authenticator-App scannen</div>
+                                <div style="font-size:0.82rem;color:#475569;margin-bottom:0.65rem;">Oder den Einrichtungsschlüssel manuell in der App eintragen:</div>
+                                <div class="copy-input-wrap">
+                                    <input type="text" id="totp_secret_input" readonly value="<?= e($setupSecret) ?>" onclick="this.select()" style="font-family:monospace;font-weight:700;font-size:0.86rem;">
+                                    <button type="button" class="copy-icon-btn" onclick="copyInputToClipboard('totp_secret_input', this)" title="Schlüssel kopieren">📋</button>
+                                </div>
+                                <div class="help-text">Typ: Zeitbasiert (TOTP, 6 Ziffern, 30 Sek.) &middot; <a href="<?= e($otpUri) ?>">Direktlink (otpauth://)</a></div>
+                            </div>
                         </div>
 
                         <form method="post" action="admin.php?module=profile">
                             <?= Auth::csrfField() ?>
                             <input type="hidden" name="sub_action" value="enable_2fa">
                             <div class="form-group">
-                                <label for="totp_verify_code">Angezeigten 6-stelligen Code aus der App zur Bestätigung eingeben</label>
+                                <label for="totp_verify_code">2. Angezeigten 6-stelligen Code aus der App zur Bestätigung eingeben</label>
                                 <input type="text" id="totp_verify_code" name="totp_verify_code" placeholder="123456" pattern="\d{6}" maxlength="6" autocomplete="one-time-code" required>
                             </div>
                             <button type="submit" class="btn btn-primary">🔐 2FA jetzt aktivieren & Notfallcodes erzeugen</button>
@@ -830,7 +887,7 @@ class SettingsController
         ?>
         <div class="card">
             <div class="card-header">
-                <h2>🔄 System-Status & Datenbank-Migration</h2>
+                <h2>System-Status & Datenbank-Migration</h2>
                 <form method="post" action="admin.php?module=updater" style="margin:0;">
                     <?= Auth::csrfField() ?>
                     <button type="submit" class="btn btn-primary btn-sm">🔄 Migrations-Prüfung jetzt ausführen</button>
@@ -864,7 +921,7 @@ class SettingsController
         </div>
 
         <div class="card">
-            <div class="card-header"><h2>📜 Fortlaufende Änderungshistorie (Changelog)</h2></div>
+            <div class="card-header"><h2>Fortlaufende Änderungshistorie (Changelog)</h2></div>
             <div class="card-body">
                 <?php foreach ($history as $ver => $meta): ?>
                     <div style="border-left:4px solid var(--adm-accent);padding-left:1rem;margin-bottom:1.5rem;">

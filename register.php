@@ -150,9 +150,16 @@ $invalidKeys = [];
 $submittedGroup = (int)($_POST['group_id'] ?? 0);
 $submittedVals  = $_POST['f'] ?? [];
 $registrationSuccess = false;
+$isPrefilledFromPrevious = false;
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     $_SESSION['form_render_ts_' . $eventId] = time();
+    if (isset($_GET['prefill']) && $_GET['prefill'] === '1' && !empty($_SESSION['prefill_event_' . $eventId])) {
+        $prefillData = $_SESSION['prefill_event_' . $eventId];
+        $submittedGroup = (int)($prefillData['group_id'] ?? 0);
+        $submittedVals  = is_array($prefillData['values'] ?? null) ? $prefillData['values'] : [];
+        $isPrefilledFromPrevious = true;
+    }
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -232,8 +239,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $tRegs = Database::table('registrations');
         $emailHash = Crypto::blindIndex($coreData['email']);
         $existing = Database::fetchOne(
-            "SELECT id FROM {$tRegs} WHERE event_id = :eid AND email_hash = :ehash LIMIT 1",
-            ['eid' => $eventId, 'ehash' => $emailHash]
+            "SELECT id FROM {$tRegs}
+             WHERE event_id = :eid AND email_hash = :ehash
+               AND LOWER(TRIM(first_name)) = LOWER(:fname)
+               AND LOWER(TRIM(last_name)) = LOWER(:lname)
+             LIMIT 1",
+            [
+                'eid'   => $eventId,
+                'ehash' => $emailHash,
+                'fname' => trim($coreData['first_name']),
+                'lname' => trim($coreData['last_name']),
+            ]
         );
         if ($existing) {
             $errors[] = I18n::t('reg.error_duplicate');
@@ -246,6 +262,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $coreData['is_confirmed'] = 0;
 
         $regId = RegistrationRepository::create($eventId, $submittedGroup, $coreData, $fields, $submittedVals);
+
+        // Für "Weitere Person anmelden" alle als keep_on_prefill = 1 markierten Felder in der Session merken
+        $prefillValues = [];
+        foreach ($fields as $pf) {
+            if ((int)($pf['keep_on_prefill'] ?? 0) === 1 && !in_array($pf['field_type'], ['heading', 'document'], true)) {
+                $pKey = $pf['field_key'];
+                if (isset($submittedVals[$pKey])) {
+                    $prefillValues[$pKey] = $submittedVals[$pKey];
+                }
+            }
+        }
+        $_SESSION['prefill_event_' . $eventId] = [
+            'group_id' => $submittedGroup,
+            'values'   => $prefillValues,
+        ];
 
         // E-Mail-Bestätigung an Teilnehmer senden
         $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
@@ -298,8 +329,18 @@ ob_start();
     <?php if ($orgaContactEmail !== ''): ?>
         <p><strong><?= e(I18n::t('reg.contact_prefix')) ?></strong> <a href="mailto:<?= e($orgaContactEmail) ?>"><?= e($orgaContactEmail) ?></a></p>
     <?php endif; ?>
-    <p><a href="index.php" class="btn btn-secondary">&larr; <?= e(I18n::t('nav.home')) ?></a></p>
+    <div style="display:flex;flex-wrap:wrap;gap:0.75rem;margin-top:1.25rem;">
+        <a href="register.php?event_id=<?= (int)$eventId ?>&prefill=1<?= $isUnlockedBySecret ? '&unlock=' . urlencode($savedUnlock) : '' ?>" class="btn btn-primary">
+            <?= e(I18n::t('reg.add_another_btn')) ?>
+        </a>
+        <a href="index.php" class="btn btn-secondary">&larr; <?= e(I18n::t('nav.home')) ?></a>
+    </div>
 <?php else: ?>
+    <?php if ($isPrefilledFromPrevious): ?>
+        <div class="alert alert-info" style="margin-bottom:1.1rem;">
+            <?= e(I18n::t('reg.prefill_notice')) ?>
+        </div>
+    <?php endif; ?>
     <?php if (!empty($errors)): ?>
         <div class="alert alert-danger">
             <strong><?= e(I18n::t('reg.error_heading')) ?></strong>

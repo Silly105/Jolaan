@@ -330,15 +330,15 @@ class EventAdminController
 
             <?php if ($isNew): ?>
                 <div class="card">
-                    <div class="card-header"><h2>🔁 Einstellungen, Felder & Listen übernehmen</h2></div>
+                    <div class="card-header"><h2>Einstellungen, Felder & Listen übernehmen</h2></div>
                     <div class="card-body">
                         <div class="form-group" style="margin-bottom:0;">
                             <label for="clone_from_event_id">Vorlage für Teilnehmergruppen, Abfragefelder und Auswertungslisten</label>
                             <select id="clone_from_event_id" name="clone_from_event_id">
-                                <option value="0">📐 Aus globaler Standard-Vorlage starten (SC, NSC, Team, Absagen + Standardfelder)</option>
+                                <option value="0">Aus globaler Standard-Vorlage starten (SC, NSC, Team, Absagen + Standardfelder)</option>
                                 <?php foreach ($allEvents as $other): ?>
                                     <option value="<?= (int)$other['id'] ?>">
-                                        📋 Komplett übernehmen von <?= e($other['title']) ?> (<?= e(format_date($other['start_date'])) ?>)
+                                        Komplett übernehmen von <?= e($other['title']) ?> (<?= e(format_date($other['start_date'])) ?>)
                                     </option>
                                 <?php endforeach; ?>
                             </select>
@@ -348,7 +348,7 @@ class EventAdminController
                 </div>
             <?php else: ?>
                 <div class="card">
-                    <div class="card-header"><h2>🔗 Direktlinks zur Online-Anmeldung</h2></div>
+                    <div class="card-header"><h2>Direktlinks zur Online-Anmeldung</h2></div>
                     <div class="card-body">
                         <div class="grid-2">
                             <div>
@@ -447,19 +447,19 @@ class EventAdminController
                             </label>
                             <label style="margin-top:0.65rem;">
                                 <input type="checkbox" name="waitlist_enabled" value="1" <?= (int)($ev['waitlist_enabled'] ?? 1) === 1 ? 'checked' : '' ?>>
-                                📋 Wartelisten-Anmeldung bei ausgebuchten Teilnehmergruppen ermöglichen
+                                Wartelisten-Anmeldung bei ausgebuchten Teilnehmergruppen ermöglichen
                             </label>
                             <div class="help-text">Wenn aktiv, können sich Teilnehmer für ausgebuchte Gruppen auf die Warteliste anmelden (Reihenfolge nach E-Mail-Bestätigung).</div>
                         </div>
                         <div class="form-group">
                             <label>
                                 <input type="checkbox" name="is_bilingual" value="1" <?= (int)$ev['is_bilingual'] === 1 ? 'checked' : '' ?>>
-                                🌐 Zweisprachige Anmeldung (Deutsch & Englisch)
+                                Zweisprachige Anmeldung (Deutsch & Englisch)
                             </label>
                             <div class="help-text">Aktiviert den Sprachumschalter und blendet links im Menü die „Übersetzungstabelle“ ein.</div>
                             <label style="margin-top:0.65rem;">
                                 <input type="checkbox" name="show_countdown" value="1" <?= (int)$ev['show_countdown'] === 1 ? 'checked' : '' ?>>
-                                ⏳ Countdown auf Startseite anzeigen
+                                Countdown auf Startseite anzeigen
                             </label>
                             <input type="datetime-local" name="countdown_target" value="<?= !empty($ev['countdown_target']) ? e(date('Y-m-d\TH:i', strtotime((string)$ev['countdown_target']))) : '' ?>" style="margin-top:0.35rem;">
                         </div>
@@ -532,7 +532,7 @@ class EventAdminController
         <?php if (!$isNew): ?>
             <div class="card" style="border-color:#fca5a5;">
                 <div class="card-header" style="background:#fef2f2;">
-                    <h2 style="color:#991b1b;">⚠️ Gefahrenzone – Veranstaltung komplett löschen</h2>
+                    <h2 style="color:#991b1b;">Gefahrenzone – Veranstaltung komplett löschen</h2>
                 </div>
                 <div class="card-body">
                     <form method="post" action="admin.php?module=events&action=delete&id=<?= $id ?>" onsubmit="return confirm('Veranstaltung samt aller Anmeldungen wirklich unwiderruflich löschen?');">
@@ -730,7 +730,7 @@ class EventAdminController
         </div>
 
         <div class="card">
-            <div class="card-header"><h2>➕ Weitere Teilnehmergruppe hinzufügen</h2></div>
+            <div class="card-header"><h2>Weitere Teilnehmergruppe hinzufügen</h2></div>
             <div class="card-body">
                 <form method="post" action="admin.php?module=groups&event_id=<?= $eventId ?>">
                     <?= Auth::csrfField() ?>

@@ -5,7 +5,7 @@ namespace App\Core;
 
 class Version
 {
-    public const CURRENT = '0.9.004';
+    public const CURRENT = '0.9.005';
 
     /**
      * Fortlaufende Änderungshistorie & Migrations-Schritte.
@@ -75,6 +75,18 @@ class Version
                     'Startseiten-Badge unterscheidet bei ausgebuchten Gruppen nun zwischen aktivierter Warteliste („Ausgebucht / Warteliste“) und deaktivierter Warteliste („Ausgebucht“)',
                     'Wartelisten-Prüfung bei E-Mail-Bestätigung berücksichtigt nun auch, ob die gesamte Veranstaltung inzwischen gesperrt wurde',
                     'Fehlerprüfung beim Dokumenten-Upload unter „Abfragefelder“, Spaltenbreite users.totp_secret in install.php auf VARCHAR(255) vereinheitlicht und Versions-Caching in config.php ergänzt',
+                ],
+            ],
+            '0.9.005' => [
+                'date'    => '2026-11-25',
+                'title'   => 'Haushalts-Mehrfachanmeldung („Übernahme“), Nativer SMTP-Mailer + Testmail, 2FA-QR-Code & UI-Bereinigung',
+                'changes' => [
+                    'Haushalts-/Mehrfachanmeldungen: Dublettenprüfung auf E-Mail + Vorname + Nachname umgestellt; Button „Weitere Person anmelden (Daten übernehmen)“ nach erfolgreicher Anmeldung ergänzt',
+                    'Neue Feld-Checkbox „Übernahme“ (keep_on_prefill) unter „Abfragefelder“ und „Feldvorlagen“, um gezielt festzulegen, welche Felder bei einer Folgeanmeldung übernommen werden (standardmäßig aktiv für Nachname, Straße, PLZ/Ort, E-Mail, Telefon)',
+                    '100 % nativer SVG-QR-Code-Generator nach ISO/IEC 18004 direkt in PHP für die 2FA-Einrichtung – komplett ohne externe Bibliotheken oder API-Aufrufe',
+                    '100 % nativer SMTP-Client (STARTTLS / SSL/TLS / AUTH LOGIN) ohne PHPMailer inkl. Testmail-Versand und Hinweistext zum Standard-Webserver-Versand in den Seiteneinstellungen',
+                    'Optische Trennung der Menügruppen im Backend durch horizontale Linien oberhalb und unterhalb jeder Gruppenüberschrift',
+                    'Emojis aus sämtlichen Seiten-/Bereichsüberschriften, Tabellen-Spaltenköpfen, Checkbox-Labels und Hilfetexten im Backend entfernt',
                 ],
             ],
         ];

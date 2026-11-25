@@ -165,6 +165,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $allChecksOk) {
                     `is_encrypted` TINYINT(1) NOT NULL DEFAULT 0,
                     `is_sensitive` TINYINT(1) NOT NULL DEFAULT 0,
                     `is_orga_only` TINYINT(1) NOT NULL DEFAULT 0,
+                    `keep_on_prefill` TINYINT(1) NOT NULL DEFAULT 0,
                     `system_mapping` VARCHAR(40) NOT NULL DEFAULT 'none',
                     `sort_order` INT NOT NULL DEFAULT 10,
                     INDEX `idx_form_fields_event` (`event_id`)
@@ -352,6 +353,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $allChecksOk) {
                 $stmtField->execute($f);
             }
             $pdo->exec("UPDATE `{$prefix}form_fields` SET `is_encrypted` = 1 WHERE `is_sensitive` = 1 OR `field_key` IN ('email', 'telefon')");
+            $pdo->exec("UPDATE `{$prefix}form_fields` SET `keep_on_prefill` = 1 WHERE `system_mapping` IN ('lastname', 'email') OR `field_key` IN ('nachname', 'strasse', 'plz', 'ort', 'email', 'telefon')");
 
             // Globale Standard-Listen-Vorlagen (event_id = NULL) anlegen
             $defaultViews = [

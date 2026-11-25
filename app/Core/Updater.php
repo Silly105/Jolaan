@@ -208,5 +208,13 @@ class Updater
                 $pdo->exec("ALTER TABLE {$tUsers} MODIFY COLUMN `totp_secret` VARCHAR(255) NULL DEFAULT NULL");
             }
         }
+
+        if ($version === '0.9.005') {
+            $tFields = Database::table('form_fields');
+            if (!self::columnExists($tFields, 'keep_on_prefill')) {
+                $pdo->exec("ALTER TABLE {$tFields} ADD COLUMN `keep_on_prefill` TINYINT(1) NOT NULL DEFAULT 0 AFTER `is_orga_only`");
+                $pdo->exec("UPDATE {$tFields} SET `keep_on_prefill` = 1 WHERE `system_mapping` IN ('lastname', 'last_name', 'email') OR `field_key` IN ('nachname', 'strasse', 'plz', 'ort', 'plz_ort', 'email', 'telefon', 'handy', 'phone')");
+            }
+        }
     }
 }

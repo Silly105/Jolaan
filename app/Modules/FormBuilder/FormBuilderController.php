@@ -38,6 +38,7 @@ class FormBuilderController
                 $isSens     = isset($_POST['is_sensitive']) ? 1 : 0;
                 $isEnc      = ($isSens === 1 || isset($_POST['is_encrypted'])) ? 1 : 0;
                 $isOrgaOnly = isset($_POST['is_orga_only']) ? 1 : 0;
+                $keepPrefill = ($isOrgaOnly === 1 || $fieldType === 'heading' || $fieldType === 'document') ? 0 : (isset($_POST['keep_on_prefill']) ? 1 : 0);
 
                 // Kollisionskontrolle: Ein "Nur für Orga sichtbar"-Feld oder eine Überschrift darf niemals Pflichtfeld im öffentlichen Formular sein
                 $isRequired = ($isOrgaOnly === 1 || $fieldType === 'heading') ? 0 : (isset($_POST['is_required']) ? 1 : 0);
@@ -94,6 +95,7 @@ class FormBuilderController
                     'enc'   => $isEnc,
                     'sens'  => $isSens,
                     'orga'  => $isOrgaOnly,
+                    'pref'  => $keepPrefill,
                     'map'   => $sysMap,
                     'sort'  => $sortOrder,
                 ];
@@ -105,7 +107,7 @@ class FormBuilderController
                             "UPDATE {$tFields} SET
                              field_key = :fkey, field_type = :ftype, label_de = :lde, label_en = :len,
                              help_de = :hde, help_en = :hen, options_json = :opt,
-                             is_required = :req, is_encrypted = :enc, is_sensitive = :sens, is_orga_only = :orga,
+                             is_required = :req, is_encrypted = :enc, is_sensitive = :sens, is_orga_only = :orga, keep_on_prefill = :pref,
                              system_mapping = :map, sort_order = :sort
                              WHERE id = :id AND event_id IS NULL",
                             $params
@@ -116,7 +118,7 @@ class FormBuilderController
                             "UPDATE {$tFields} SET
                              field_key = :fkey, field_type = :ftype, label_de = :lde, label_en = :len,
                              help_de = :hde, help_en = :hen, options_json = :opt,
-                             is_required = :req, is_encrypted = :enc, is_sensitive = :sens, is_orga_only = :orga,
+                             is_required = :req, is_encrypted = :enc, is_sensitive = :sens, is_orga_only = :orga, keep_on_prefill = :pref,
                              system_mapping = :map, sort_order = :sort
                              WHERE id = :id AND event_id = :eid",
                             $params
@@ -127,8 +129,8 @@ class FormBuilderController
                     $params['eid'] = $eventId;
                     Database::query(
                         "INSERT INTO {$tFields}
-                         (event_id, field_key, field_type, label_de, label_en, help_de, help_en, options_json, is_required, is_encrypted, is_sensitive, is_orga_only, system_mapping, sort_order)
-                         VALUES (:eid, :fkey, :ftype, :lde, :len, :hde, :hen, :opt, :req, :enc, :sens, :orga, :map, :sort)",
+                         (event_id, field_key, field_type, label_de, label_en, help_de, help_en, options_json, is_required, is_encrypted, is_sensitive, is_orga_only, keep_on_prefill, system_mapping, sort_order)
+                         VALUES (:eid, :fkey, :ftype, :lde, :len, :hde, :hen, :opt, :req, :enc, :sens, :orga, :pref, :map, :sort)",
                         $params
                     );
                     $_SESSION['flash_success'] = "Neues Feld „{$labelDe}“ wurde hinzugefügt.";
@@ -141,16 +143,17 @@ class FormBuilderController
                 // Schnellspeichern der Tabelle (Sortierung & Flags)
                 foreach ($_POST['q'] ?? [] as $fid => $qData) {
                     $fid = (int)$fid;
-                    $isOrgaOnly = isset($qData['is_orga_only']) ? 1 : 0;
-                    $isRequired = $isOrgaOnly === 1 ? 0 : (isset($qData['is_required']) ? 1 : 0);
-                    $isSens     = isset($qData['is_sensitive']) ? 1 : 0;
-                    $isEnc      = ($isSens === 1 || isset($qData['is_encrypted'])) ? 1 : 0;
-                    $sort       = (int)($qData['sort_order'] ?? 10);
+                    $isOrgaOnly  = isset($qData['is_orga_only']) ? 1 : 0;
+                    $isRequired  = $isOrgaOnly === 1 ? 0 : (isset($qData['is_required']) ? 1 : 0);
+                    $isSens      = isset($qData['is_sensitive']) ? 1 : 0;
+                    $isEnc       = ($isSens === 1 || isset($qData['is_encrypted'])) ? 1 : 0;
+                    $keepPrefill = $isOrgaOnly === 1 ? 0 : (isset($qData['keep_on_prefill']) ? 1 : 0);
+                    $sort        = (int)($qData['sort_order'] ?? 10);
 
                     Database::query(
-                        "UPDATE {$tFields} SET sort_order = :sort, is_required = :req, is_encrypted = :enc, is_sensitive = :sens, is_orga_only = :orga
+                        "UPDATE {$tFields} SET sort_order = :sort, is_required = :req, is_encrypted = :enc, is_sensitive = :sens, is_orga_only = :orga, keep_on_prefill = :pref
                          WHERE id = :id",
-                        ['sort' => $sort, 'req' => $isRequired, 'enc' => $isEnc, 'sens' => $isSens, 'orga' => $isOrgaOnly, 'id' => $fid]
+                        ['sort' => $sort, 'req' => $isRequired, 'enc' => $isEnc, 'sens' => $isSens, 'orga' => $isOrgaOnly, 'pref' => $keepPrefill, 'id' => $fid]
                     );
                 }
                 $_SESSION['flash_success'] = 'Reihenfolge und Feld-Optionen wurden gespeichert.';
@@ -189,24 +192,25 @@ class FormBuilderController
 
         ob_start();
         if (!$event) {
-            echo '<div class="alert alert-success" style="background:#eff6ff;border-color:#93c5fd;color:#1e3a8a;">📐 Du bearbeitest hier die <strong>globale Standard-Feldvorlage</strong>. Diese Felder werden automatisch vorgeschlagen, wenn eine neue Veranstaltung ohne Kopier-Vorlage erstellt wird.</div>';
+            echo '<div class="alert alert-success" style="background:#eff6ff;border-color:#93c5fd;color:#1e3a8a;">Du bearbeitest hier die <strong>globale Standard-Feldvorlage</strong>. Diese Felder werden automatisch vorgeschlagen, wenn eine neue Veranstaltung ohne Kopier-Vorlage erstellt wird.</div>';
         }
 
         $ef = $editField ?? [
-            'id'             => 0,
-            'field_key'      => '',
-            'field_type'     => 'text',
-            'label_de'       => '',
-            'label_en'       => '',
-            'help_de'        => '',
-            'help_en'        => '',
-            'options_json'   => '',
-            'is_required'    => 0,
-            'is_encrypted'   => 0,
-            'is_sensitive'   => 0,
-            'is_orga_only'   => 0,
-            'system_mapping' => 'none',
-            'sort_order'     => (count($fields) + 1) * 10,
+            'id'              => 0,
+            'field_key'       => '',
+            'field_type'      => 'text',
+            'label_de'        => '',
+            'label_en'        => '',
+            'help_de'         => '',
+            'help_en'         => '',
+            'options_json'    => '',
+            'is_required'     => 0,
+            'is_encrypted'    => 0,
+            'is_sensitive'    => 0,
+            'is_orga_only'    => 0,
+            'keep_on_prefill' => 0,
+            'system_mapping'  => 'none',
+            'sort_order'      => (count($fields) + 1) * 10,
         ];
         $optsDecoded = json_decode((string)$ef['options_json'], true) ?: [];
         $optsDeText  = isset($optsDecoded['de']) && is_array($optsDecoded['de']) ? implode("\n", $optsDecoded['de']) : '';
@@ -218,7 +222,7 @@ class FormBuilderController
 
         <div class="card">
             <div class="card-header">
-                <h2><?= $ef['id'] > 0 ? '✏️ Feld bearbeiten – ' . e($ef['label_de']) : '➕ Neues Formularfeld hinzufügen' ?></h2>
+                <h2><?= $ef['id'] > 0 ? 'Feld bearbeiten – ' . e($ef['label_de']) : 'Neues Formularfeld hinzufügen' ?></h2>
                 <?php if ($ef['id'] > 0): ?>
                     <a href="admin.php?module=formbuilder&event_id=<?= $eventId ?? 0 ?>" class="btn btn-secondary btn-sm">Abbrechen / Neues Feld</a>
                 <?php endif; ?>
@@ -317,19 +321,23 @@ class FormBuilderController
                     <div style="display:flex;flex-wrap:wrap;gap:1.5rem;background:#f8fafc;padding:0.9rem 1.1rem;border-radius:6px;border:1px solid #e2e8f0;margin-bottom:1rem;">
                         <label style="margin:0;cursor:pointer;">
                             <input type="checkbox" id="chk_required" name="is_required" value="1" <?= (int)$ef['is_required'] === 1 ? 'checked' : '' ?>>
-                            ⭐ <strong>Pflichtfeld</strong>
+                            <strong>Pflichtfeld</strong>
                         </label>
                         <label style="margin:0;cursor:pointer;">
                             <input type="checkbox" id="chk_encrypted" name="is_encrypted" value="1" <?= ((int)($ef['is_encrypted'] ?? 0) === 1 || (int)$ef['is_sensitive'] === 1) ? 'checked' : '' ?>>
-                            🔒 <strong>Verschlüsselt in DB speichern (AES-256)</strong> (z. B. E-Mail, Telefon; bleibt bei 1-Klick-Bereinigung erhalten)
+                            <strong>Verschlüsselt in DB speichern (AES-256)</strong> (z. B. E-Mail, Telefon; bleibt bei 1-Klick-Bereinigung erhalten)
                         </label>
                         <label style="margin:0;cursor:pointer;">
                             <input type="checkbox" id="chk_sensitive" name="is_sensitive" value="1" <?= (int)$ef['is_sensitive'] === 1 ? 'checked' : '' ?> onchange="if(this.checked){document.getElementById('chk_encrypted').checked=true;}">
-                            🧹 <strong>Sensible Daten (Nach Con per 1-Klick löschen)</strong> (z. B. Allergien, Krankheiten; aktiviert automatisch Verschlüsselung)
+                            <strong>Sensible Daten (Nach Con per 1-Klick löschen)</strong> (z. B. Allergien, Krankheiten; aktiviert automatisch Verschlüsselung)
                         </label>
                         <label style="margin:0;cursor:pointer;">
                             <input type="checkbox" id="chk_orga_only" name="is_orga_only" value="1" <?= (int)$ef['is_orga_only'] === 1 ? 'checked' : '' ?> onchange="enforceOrgaRequiredCollision()">
-                            👁️ <strong>Nur für Orga sichtbar</strong> (deaktiviert automatisch „Pflichtfeld“)
+                            <strong>Nur für Orga sichtbar</strong> (deaktiviert automatisch „Pflichtfeld“)
+                        </label>
+                        <label style="margin:0;cursor:pointer;">
+                            <input type="checkbox" id="chk_prefill" name="keep_on_prefill" value="1" <?= (int)($ef['keep_on_prefill'] ?? 0) === 1 ? 'checked' : '' ?>>
+                            <strong>Übernahme bei weiterer Anmeldung</strong> (z. B. Nachname, Adresse, E-Mail, Telefon)
                         </label>
                     </div>
 
@@ -343,7 +351,7 @@ class FormBuilderController
         <!-- Übersicht aller vorhandenen Felder -->
         <div class="card">
             <div class="card-header">
-                <h2>📋 Vorhandene Felder (<?= count($fields) ?>)</h2>
+                <h2>Vorhandene Felder (<?= count($fields) ?>)</h2>
             </div>
             <div class="card-body">
                 <form method="post" action="admin.php?module=formbuilder&event_id=<?= $eventId ?? 0 ?>">
@@ -357,9 +365,10 @@ class FormBuilderController
                                     <th>Bezeichnung (DE / EN)</th>
                                     <th>Feldtyp</th>
                                     <th style="text-align:center;">Pflichtfeld</th>
-                                    <th style="text-align:center;" title="Wird mit AES-256-GCM verschlüsselt gespeichert">🔒 Verschlüsselt</th>
-                                    <th style="text-align:center;" title="Wird bei der 1-Klick-Bereinigung nach der Con gelöscht">🧹 Sensibel (Löschen nach Con)</th>
+                                    <th style="text-align:center;" title="Wird mit AES-256-GCM verschlüsselt gespeichert">Verschlüsselt</th>
+                                    <th style="text-align:center;" title="Wird bei der 1-Klick-Bereinigung nach der Con gelöscht">Sensibel</th>
                                     <th style="text-align:center;">Nur für Orga</th>
+                                    <th style="text-align:center;" title="Wird beim Klick auf „Weitere Person anmelden“ vorausgefüllt">Übernahme</th>
                                     <th>Aktionen</th>
                                 </tr>
                             </thead>
@@ -367,6 +376,7 @@ class FormBuilderController
                                 <?php foreach ($fields as $f):
                                     $fid = (int)$f['id'];
                                     $isHeading = $f['field_type'] === 'heading';
+                                    $isDoc     = $f['field_type'] === 'document';
                                     $isSens = (int)$f['is_sensitive'] === 1;
                                     $isEnc  = $isSens || ((int)($f['is_encrypted'] ?? 0) === 1);
                                 ?>
@@ -406,6 +416,11 @@ class FormBuilderController
                                                 <input type="checkbox" class="row-orga" data-fid="<?= $fid ?>" name="q[<?= $fid ?>][is_orga_only]" value="1" <?= (int)$f['is_orga_only'] === 1 ? 'checked' : '' ?> onchange="toggleRowCollision(<?= $fid ?>, this.checked)">
                                             <?php endif; ?>
                                         </td>
+                                        <td style="text-align:center;">
+                                            <?php if (!$isHeading && !$isDoc): ?>
+                                                <input type="checkbox" class="row-prefill" data-fid="<?= $fid ?>" name="q[<?= $fid ?>][keep_on_prefill]" value="1" <?= (int)($f['keep_on_prefill'] ?? 0) === 1 ? 'checked' : '' ?> <?= (int)$f['is_orga_only'] === 1 ? 'disabled' : '' ?>>
+                                            <?php endif; ?>
+                                        </td>
                                         <td style="white-space:nowrap;">
                                             <a href="admin.php?module=formbuilder&event_id=<?= $eventId ?? 0 ?>&edit_id=<?= $fid ?>" class="btn btn-secondary btn-sm">✏️ Details</a>
                                             <button type="submit" name="sub_action" value="delete_field" onclick="document.getElementById('del_fid').value='<?= $fid ?>';return confirm('Feld wirklich löschen?');" class="btn btn-danger btn-sm">✕</button>
@@ -432,21 +447,39 @@ class FormBuilderController
         function enforceOrgaRequiredCollision() {
             const orgaChk = document.getElementById('chk_orga_only');
             const reqChk  = document.getElementById('chk_required');
+            const prefChk = document.getElementById('chk_prefill');
             if (orgaChk.checked) {
                 reqChk.checked = false;
                 reqChk.disabled = true;
+                if (prefChk) {
+                    prefChk.checked = false;
+                    prefChk.disabled = true;
+                }
             } else {
                 reqChk.disabled = false;
+                if (prefChk) {
+                    prefChk.disabled = false;
+                }
             }
         }
         function toggleRowCollision(fid, isOrga) {
-            const req = document.querySelector('.row-req[data-fid="' + fid + '"]');
-            if (!req) return;
-            if (isOrga) {
-                req.checked = false;
-                req.disabled = true;
-            } else {
-                req.disabled = false;
+            const req  = document.querySelector('.row-req[data-fid="' + fid + '"]');
+            const pref = document.querySelector('.row-prefill[data-fid="' + fid + '"]');
+            if (req) {
+                if (isOrga) {
+                    req.checked = false;
+                    req.disabled = true;
+                } else {
+                    req.disabled = false;
+                }
+            }
+            if (pref) {
+                if (isOrga) {
+                    pref.checked = false;
+                    pref.disabled = true;
+                } else {
+                    pref.disabled = false;
+                }
             }
         }
         toggleFieldTypeOptions();
@@ -611,7 +644,7 @@ class FormBuilderController
 
         <div class="card">
             <div class="card-header">
-                <h2>🌐 Zentrale Übersetzungstabelle (Deutsch &leftrightarrow; Englisch)</h2>
+                <h2>Zentrale Übersetzungstabelle (Deutsch &leftrightarrow; Englisch)</h2>
             </div>
             <div class="card-body">
                 <form method="post" action="admin.php?module=translations&event_id=<?= $eventId ?>">
@@ -701,7 +734,7 @@ class FormBuilderController
         </div>
 
         <div class="card">
-            <div class="card-header"><h2>⚡ Schnell-Übersetzung (Tabellen Copy & Paste für DeepL / KI)</h2></div>
+            <div class="card-header"><h2>Schnell-Übersetzung (Tabellen Copy & Paste für DeepL / KI)</h2></div>
             <div class="card-body">
                 <p style="margin-top:0;font-size:0.88rem;color:#475569;">
                     Du kannst diese tabulatorgetrennte Tabelle (Format: <code>Schlüssel [TAB] Deutsch [TAB] Englisch</code>) kopieren, in einem Rutsch übersetzen lassen und unten wieder einfügen:

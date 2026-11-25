@@ -230,7 +230,8 @@ class AdminLayout
                     color: #ffffff;
                 }
                 .nav-section {
-                    padding: 0.95rem 1.35rem 0.35rem;
+                    padding: 0.45rem 1.35rem;
+                    margin: 0.55rem 0 0.25rem;
                     font-size: 0.74rem;
                     text-transform: uppercase;
                     letter-spacing: 0.06em;
@@ -238,11 +239,15 @@ class AdminLayout
                     font-weight: 700;
                     word-wrap: break-word;
                     overflow-wrap: break-word;
+                    border-top: 1px solid rgba(255, 255, 255, 0.14);
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+                    background: rgba(0, 0, 0, 0.12);
                 }
                 .nav-section.active-event-heading {
                     color: var(--adm-accent-light);
-                    border-top: 1px solid rgba(255, 255, 255, 0.08);
-                    margin-top: 0.35rem;
+                    border-top-color: rgba(255, 255, 255, 0.2);
+                    border-bottom-color: rgba(255, 255, 255, 0.2);
+                    background: rgba(0, 0, 0, 0.2);
                 }
                 .side-nav { list-style: none; margin: 0; padding: 0; }
                 .side-nav li a {

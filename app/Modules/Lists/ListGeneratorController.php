@@ -292,7 +292,7 @@ class ListGeneratorController
         <!-- Gespeicherte Listen-Vorlagen (untereinander, eine pro Zeile, ohne Veranstaltungs-Dropdown & ohne 📌/📥) -->
         <div class="card">
             <div class="card-header">
-                <h2>📋 Gespeicherte Auswertungslisten für „<?= e($event['title']) ?>“</h2>
+                <h2>Gespeicherte Auswertungslisten für „<?= e($event['title']) ?>“</h2>
             </div>
             <div class="card-body">
                 <div style="display:flex;flex-direction:column;gap:0.45rem;max-width:640px;">
@@ -336,7 +336,7 @@ class ListGeneratorController
         <!-- Neue Auswertungsliste erstellen -->
         <div class="card">
             <div class="card-header">
-                <h2>🔍 Neue Auswertungsliste erstellen</h2>
+                <h2>Neue Auswertungsliste erstellen</h2>
             </div>
             <div class="card-body">
                 <form method="get" action="admin.php" id="filterForm">
@@ -463,7 +463,7 @@ class ListGeneratorController
         <!-- Ergebnistabelle -->
         <div class="card">
             <div class="card-header">
-                <h2>📄 Ergebnis: <?= e($activeViewName) ?> (<?= count($filteredRegs) ?> Teilnehmer)</h2>
+                <h2>Ergebnis: <?= e($activeViewName) ?> (<?= count($filteredRegs) ?> Teilnehmer)</h2>
                 <div>
                     <a href="<?= e($printUrl) ?>" target="_blank" class="btn btn-secondary btn-sm">🖨️ Druckansicht</a>
                     <a href="<?= e($csvUrl) ?>" class="btn btn-secondary btn-sm">📥 CSV-Export</a>

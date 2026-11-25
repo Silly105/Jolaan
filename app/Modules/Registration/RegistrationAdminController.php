@@ -515,7 +515,7 @@ class RegistrationAdminController
         <?php if (!empty($unconfirmedDoi)): ?>
             <div class="card" style="border-color:#fcd34d;">
                 <div class="card-header" style="background:#fef3c7;">
-                    <h2 style="color:#92400e;">⏳ Noch nicht per E-Mail bestätigt (E-Mail-Bestätigung ausstehend: <?= count($unconfirmedDoi) ?>)</h2>
+                    <h2 style="color:#92400e;">Noch nicht per E-Mail bestätigt (E-Mail-Bestätigung ausstehend: <?= count($unconfirmedDoi) ?>)</h2>
                 </div>
                 <div class="card-body table-responsive">
                     <table class="data-table">
@@ -569,7 +569,7 @@ class RegistrationAdminController
         <?php if (!empty($waitlistRegs)): ?>
             <div class="card" style="border-color:#fdba74;">
                 <div class="card-header" style="background:#ffedd5;">
-                    <h2 style="color:#c2410c;">📋 Wartelisten-Anmeldungen in Reihenfolge der E-Mail-Bestätigung (<?= count($waitlistRegs) ?>)</h2>
+                    <h2 style="color:#c2410c;">Wartelisten-Anmeldungen in Reihenfolge der E-Mail-Bestätigung (<?= count($waitlistRegs) ?>)</h2>
                 </div>
                 <div class="card-body table-responsive">
                     <table class="data-table">
@@ -670,7 +670,7 @@ class RegistrationAdminController
         <?php if (!$isNew): ?>
             <div class="card">
                 <div class="card-header">
-                    <h2>✉️ System-E-Mails & Aktionen für <?= e($r['first_name'] . ' ' . $r['last_name']) ?> (<?= e($r['email']) ?>)</h2>
+                    <h2>System-E-Mails & Aktionen für <?= e($r['first_name'] . ' ' . $r['last_name']) ?> (<?= e($r['email']) ?>)</h2>
                 </div>
                 <div class="card-body" style="display:flex;flex-wrap:wrap;gap:0.65rem;">
                     <?php if ($isWaitlist): ?>
@@ -720,7 +720,7 @@ class RegistrationAdminController
 
             <div class="card">
                 <div class="card-header">
-                    <h2><?= $isNew ? '➕ Teilnehmer manuell eintragen (Orga-Anmeldung)' : 'Status, Gruppe & Zahlung – ' . e($r['first_name'] . ' ' . $r['last_name']) ?></h2>
+                    <h2><?= $isNew ? 'Teilnehmer manuell eintragen (Orga-Anmeldung)' : 'Status, Gruppe & Zahlung – ' . e($r['first_name'] . ' ' . $r['last_name']) ?></h2>
                     <a href="admin.php?module=registrations&event_id=<?= $eventId ?>" class="btn btn-secondary btn-sm">&larr; Zurück zur Liste</a>
                 </div>
                 <div class="card-body">
@@ -751,19 +751,19 @@ class RegistrationAdminController
                     <div style="display:flex;flex-wrap:wrap;gap:1.5rem;background:#f8fafc;padding:0.9rem 1.1rem;border-radius:6px;border:1px solid #e2e8f0;margin-bottom:1rem;">
                         <label style="margin:0;cursor:pointer;">
                             <input type="checkbox" name="is_confirmed" value="1" <?= (int)$r['is_confirmed'] === 1 ? 'checked' : '' ?>>
-                            📧 <strong>E-Mail-Bestätigung erfolgt</strong>
+                            <strong>E-Mail-Bestätigung erfolgt</strong>
                         </label>
                         <label style="margin:0;cursor:pointer;">
                             <input type="checkbox" name="is_waitlist" value="1" <?= $isWaitlist ? 'checked' : '' ?>>
-                            📋 <strong>Auf Warteliste</strong> <?= $waitPos !== null ? '(aktuell Platz #' . $waitPos . ')' : '' ?>
+                            <strong>Auf Warteliste</strong> <?= $waitPos !== null ? '(aktuell Platz #' . $waitPos . ')' : '' ?>
                         </label>
                         <label style="margin:0;cursor:pointer;">
                             <input type="checkbox" name="is_orga_confirmed" value="1" <?= (int)$r['is_orga_confirmed'] === 1 ? 'checked' : '' ?>>
-                            ✅ <strong>Anmeldung durch Orga bestätigt</strong>
+                            <strong>Anmeldung durch Orga bestätigt</strong>
                         </label>
                         <label style="margin:0;cursor:pointer;">
                             <input type="checkbox" name="is_fully_paid" value="1" <?= (int)$r['is_fully_paid'] === 1 ? 'checked' : '' ?>>
-                            💶 <strong>Voller Preis bezahlt (Nichts mehr offen)</strong>
+                            <strong>Voller Preis bezahlt (Nichts mehr offen)</strong>
                         </label>
                     </div>
 
@@ -779,7 +779,7 @@ class RegistrationAdminController
                     </div>
                     <div class="grid-2">
                         <div class="form-group">
-                            <label>E-Mail-Adresse (Stammsatz) 🔒</label>
+                            <label>E-Mail-Adresse (Stammsatz)</label>
                             <input type="email" name="core_email" value="<?= e($r['email']) ?>">
                         </div>
                         <div class="form-group">
@@ -801,7 +801,7 @@ class RegistrationAdminController
             <?php if (!$isNew): ?>
                 <div class="card">
                     <div class="card-header">
-                        <h2>🕒 Zeitlicher Verlauf & System-Protokoll</h2>
+                        <h2>Zeitlicher Verlauf & System-Protokoll</h2>
                     </div>
                     <div class="card-body">
                         <textarea rows="5" readonly style="font-family:monospace;font-size:0.85rem;background:#f8fafc;color:#334155;cursor:default;"><?= e(trim((string)($r['history_log'] ?? '')) ?: 'Noch keine Protokolleinträge vorhanden.') ?></textarea>
@@ -812,7 +812,7 @@ class RegistrationAdminController
 
             <div class="card">
                 <div class="card-header">
-                    <h2>📋 Formularfelder & Interne Orga-Felder</h2>
+                    <h2>Formularfelder & Interne Orga-Felder</h2>
                 </div>
                 <div class="card-body">
                     <?php foreach ($fields as $f):
@@ -834,12 +834,12 @@ class RegistrationAdminController
                             <label for="f_<?= e($key) ?>">
                                 <?= e($f['label_de']) ?>
                                 <?php if ($isOrgaOnly): ?>
-                                    <span class="badge badge-blue">👁️ Nur für Orga sichtbar</span>
+                                    <span class="badge badge-blue">Nur für Orga sichtbar</span>
                                 <?php endif; ?>
                                 <?php if ($isSens): ?>
-                                    <span class="badge badge-amber">🧹 Sensible Daten (Verschlüsselt + 1-Klick-Bereinigung)</span>
+                                    <span class="badge badge-amber">Sensibel (Verschlüsselt + 1-Klick-Bereinigung)</span>
                                 <?php elseif ($isEnc): ?>
-                                    <span class="badge badge-gray">🔒 Verschlüsselt</span>
+                                    <span class="badge badge-gray">Verschlüsselt</span>
                                 <?php endif; ?>
                             </label>
 
