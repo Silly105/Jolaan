@@ -2,9 +2,6 @@
     --font-heading: "Segoe UI", Bahnschrift, "Trebuchet MS", Consolas, sans-serif;
     --font-body: "Segoe UI", system-ui, -apple-system, sans-serif;
     --bg-body: #060c17;
-    --bg-pattern: radial-gradient(ellipse at 50% 0%, rgba(14, 165, 233, 0.14) 0%, rgba(4, 8, 16, 0.78) 80%), url('assets/bg.jpg');
-    --bg-size: auto, 760px auto;
-    --bg-attachment: fixed;
     --text-color: #dbeafe;
     --text-muted: #93b4d4;
     --accent: #38bdf8;
@@ -52,6 +49,13 @@
     --btn-sec-hover: rgba(22, 50, 86, 0.95);
     --btn-radius: 0px;
     --radius: 2px;
+}
+
+body {
+    background-color: #060c17;
+    background-image: radial-gradient(ellipse at 50% 0%, rgba(14, 165, 233, 0.14) 0%, rgba(4, 8, 16, 0.62) 80%), url('assets/bg.jpg');
+    background-size: auto, 760px auto;
+    background-attachment: scroll, fixed;
 }
 
 .site-header {

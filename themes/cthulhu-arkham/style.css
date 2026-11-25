@@ -2,9 +2,6 @@
     --font-heading: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
     --font-body: Georgia, "Segoe UI", serif;
     --bg-body: #0b1917;
-    --bg-pattern: radial-gradient(ellipse at 50% 25%, rgba(38, 79, 71, 0.16) 0%, rgba(7, 15, 14, 0.72) 85%), url('assets/bg.jpg');
-    --bg-size: auto, 800px auto;
-    --bg-attachment: fixed;
     --text-color: #1c2421;
     --text-muted: #4a5953;
     --accent: #1d443d;
@@ -38,6 +35,13 @@
     --btn-sec-hover: #dfd9c3;
     --btn-radius: 3px;
     --radius: 4px;
+}
+
+body {
+    background-color: #0b1917;
+    background-image: radial-gradient(ellipse at 50% 25%, rgba(38, 79, 71, 0.16) 0%, rgba(7, 15, 14, 0.58) 85%), url('assets/bg.jpg');
+    background-size: auto, 800px auto;
+    background-attachment: scroll, fixed;
 }
 
 .site-header {

@@ -2,9 +2,6 @@
     --font-heading: "Gill Sans", "Century Gothic", "Trebuchet MS", Optima, sans-serif;
     --font-body: "Segoe UI", Optima, Candara, sans-serif;
     --bg-body: #0a1c17;
-    --bg-pattern: linear-gradient(180deg, rgba(7, 20, 17, 0.58) 0%, rgba(7, 20, 17, 0.72) 100%), url('assets/bg.jpg');
-    --bg-size: auto, 640px auto;
-    --bg-attachment: fixed;
     --text-color: #161b19;
     --text-muted: #525954;
     --accent: #0f3b31;
@@ -35,6 +32,13 @@
     --btn-sec-hover: #f2e7ce;
     --btn-radius: 0px;
     --radius: 0px;
+}
+
+body {
+    background-color: #0a1c17;
+    background-image: linear-gradient(180deg, rgba(7, 20, 17, 0.38) 0%, rgba(7, 20, 17, 0.55) 100%), url('assets/bg.jpg');
+    background-size: auto, 640px auto;
+    background-attachment: scroll, fixed;
 }
 
 .site-header {

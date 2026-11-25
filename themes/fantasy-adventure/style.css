@@ -2,9 +2,6 @@
     --font-heading: Georgia, "Book Antiqua", "Palatino Linotype", serif;
     --font-body: Georgia, "Segoe UI", serif;
     --bg-body: #22150c;
-    --bg-pattern: radial-gradient(ellipse at 50% 20%, rgba(255, 214, 145, 0.12) 0%, rgba(16, 9, 4, 0.65) 85%), url('assets/bg.jpg');
-    --bg-size: auto, 820px auto;
-    --bg-attachment: fixed;
     --text-color: #2c1d10;
     --text-muted: #5e452b;
     --accent: #234f2c;
@@ -35,6 +32,13 @@
     --btn-sec-hover: #ebd9b2;
     --btn-radius: 5px;
     --radius: 6px;
+}
+
+body {
+    background-color: #22150c;
+    background-image: radial-gradient(ellipse at 50% 20%, rgba(255, 214, 145, 0.12) 0%, rgba(16, 9, 4, 0.52) 85%), url('assets/bg.jpg');
+    background-size: auto, 820px auto;
+    background-attachment: scroll, fixed;
 }
 
 .site-header {

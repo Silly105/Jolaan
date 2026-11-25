@@ -5,7 +5,7 @@ namespace App\Core;
 
 class Version
 {
-    public const CURRENT = '0.9.007';
+    public const CURRENT = '0.9.008';
 
     /**
      * Fortlaufende Änderungshistorie & Migrations-Schritte.
@@ -108,6 +108,15 @@ class Version
                     'Neues Genre-Theme „Tanzball“ (höfisches Fantasy-/Mittelalter-Ball-Design in Samtrot, Weiß und Blattgold mit Brokat-Hintergrund, Wappen-Ornamentik und goldener Kronen-Zierlinie)',
                     'Automatisches CSS-Cache-Busting (?v=...) für base.css und Theme-Stylesheets sowie abgesicherte Positionierung der Eck-Ornamente eingebaut',
                     'Kategorie-Überschrift in den Theme-Auswahlmenüs auf „Genre-Themes“ gekürzt und Emojis in der Info-Box über dem Anmeldeformular entfernt',
+                ],
+            ],
+            '0.9.008' => [
+                'date'    => '2026-11-26',
+                'title'   => 'Aktivierung aller Genre-Hintergrundtexturen & Feinschliff „Keltensiegel“ / „Feuervogel“',
+                'changes' => [
+                    'Relativen CSS-Bildpfad für die Hintergrundtexturen (assets/bg.jpg) in allen 8 Genre-Themes korrigiert, sodass die Texturen nun überall sichtbar geladen werden',
+                    'Theme „Keltensiegel“ in „Keltensiegel (Mittelalter / Fantasy – Feiern)“ umbenannt und obere Eckknoten sauber im hellgrünen Inhaltsbereich unterhalb der Kopfleiste ausgerichtet',
+                    'Theme „Tanzball“ in „Feuervogel (Mittelalter / Fantasy – Tanzball)“ umbenannt: purpurroter Damast-Brokat im Header kombiniert mit hellem Perlweiß-/Seiden-Hintergrund hinter dem Anmeldeformular',
                 ],
             ],
         ];

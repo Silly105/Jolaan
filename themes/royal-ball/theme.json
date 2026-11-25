@@ -1,8 +1,8 @@
 {
-    "name": "Tanzball",
-    "description": "Höfisches Mittelalter- & Fantasy-Ball-Design in Königlichem Samtrot, strahlendem Weiß und Blattgold mit Kronen- & Wappen-Ornamentik.",
+    "name": "Feuervogel (Mittelalter / Fantasy – Tanzball)",
+    "description": "Höfisches Ball-Design mit königlich-rotem Damast-Header, hellem Perlweiß-Seidenhintergrund hinter dem Formular sowie Kronen- & Gold-Ornamentik.",
     "category": "genre",
     "sort_order": 125,
-    "preview_bg": "#fffdf9",
+    "preview_bg": "#faf8f3",
     "preview_accent": "#8c1428"
 }

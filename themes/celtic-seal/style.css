@@ -2,9 +2,6 @@
     --font-heading: Georgia, "Book Antiqua", "Palatino Linotype", serif;
     --font-body: Verdana, "Segoe UI", Tahoma, sans-serif;
     --bg-body: #eaf7cb;
-    --bg-pattern: url('assets/bg.jpg');
-    --bg-size: 560px auto;
-    --bg-attachment: scroll;
     --text-color: #182616;
     --text-muted: #4a633b;
     --accent: #255E00;
@@ -35,6 +32,13 @@
     --btn-sec-hover: #d2e6b5;
     --btn-radius: 3px;
     --radius: 4px;
+}
+
+body {
+    background-color: #eaf7cb;
+    background-image: url('assets/bg.jpg');
+    background-size: 520px auto;
+    background-repeat: repeat;
 }
 
 /* Klassischer Keltensiegel-Seitenkopf mit Moosgrün-Verlauf & Rahmen */
@@ -128,15 +132,36 @@
     position: absolute;
     pointer-events: none;
     z-index: 2;
-    width: 54px;
-    height: 54px;
+    width: 52px;
+    height: 52px;
     background: url('assets/corner-knot.svg') no-repeat center / contain;
 }
-/* Unterhalb der 48px hohen Kopfzeile in den oberen Ecken des Karten-Inhalts + unten in den Ecken */
-.card-ornament-tl { top: 52px; left: 4px; }
-.card-ornament-tr { top: 52px; right: 4px; transform: scaleX(-1); }
-.card-ornament-bl { bottom: 4px; left: 4px; transform: scaleY(-1); }
-.card-ornament-br { bottom: 4px; right: 4px; transform: scale(-1, -1); }
+/* Obere Ecken werden direkt an .card-body gekoppelt, damit sie immer sauber im hellgrünen Bereich unterhalb des Kopfbalkens liegen */
+.card-ornament-tl,
+.card-ornament-tr {
+    display: none;
+}
+.card-ornament-bl { bottom: 6px; left: 6px; transform: scaleY(-1); }
+.card-ornament-br { bottom: 6px; right: 6px; transform: scale(-1, -1); }
+
+.card-body::before,
+.card-body::after {
+    content: "";
+    position: absolute;
+    top: 6px;
+    width: 52px;
+    height: 52px;
+    background: url('assets/corner-knot.svg') no-repeat center / contain;
+    pointer-events: none;
+    z-index: 1;
+}
+.card-body::before {
+    left: 6px;
+}
+.card-body::after {
+    right: 6px;
+    transform: scaleX(-1);
+}
 
 .card-header {
     background:
