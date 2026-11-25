@@ -1,0 +1,147 @@
+@import url('../base.css');
+
+:root {
+    --font-heading: Rockwell, "Clarendon", "Courier New", Georgia, serif;
+    --font-body: Georgia, "Times New Roman", serif;
+    --bg-body: #24160e;
+    --bg-pattern: linear-gradient(180deg, rgba(20, 12, 7, 0.38) 0%, rgba(20, 12, 7, 0.55) 100%), url('assets/bg.jpg');
+    --bg-size: auto, 760px auto;
+    --bg-attachment: fixed;
+    --text-color: #29180d;
+    --text-muted: #5e412c;
+    --accent: #8c3314;
+    --accent-hover: #63210a;
+    --accent-border: #c28542;
+    --header-bg: #24140b;
+    --header-text: #f7ead0;
+    --nav-bg: #3b2213;
+    --nav-link: #f0d7b1;
+    --card-bg: #f6ead2;
+    --card-border: #4a2e1b;
+    --card-header-bg: #362012;
+    --card-header-text: #f8ebd2;
+    --banner-bg: #eddcc0;
+    --item-bg: #fbf3e2;
+    --badge-bg: #ebdab8;
+    --badge-text: #4a2810;
+    --input-bg: #fdf8ed;
+    --input-text: #26160b;
+    --input-border: #8c6d4d;
+    --input-radius: 2px;
+    --focus-ring: rgba(140, 51, 20, 0.24);
+    --btn-bg: #8c3314;
+    --btn-hover: #63210a;
+    --btn-text: #fbf2e1;
+    --btn-sec-bg: #f3e4c6;
+    --btn-sec-text: #362012;
+    --btn-sec-hover: #e5cfa6;
+    --btn-radius: 2px;
+    --radius: 2px;
+}
+
+.site-header {
+    background: linear-gradient(180deg, #1c0f08 0%, #2e1a0e 100%);
+    border-bottom: 4px double #c28542;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
+}
+
+.brand-title {
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #f6e3be;
+    text-shadow: 2px 2px 0 #120904;
+}
+
+.top-nav {
+    border-top: 1px dashed rgba(214, 168, 110, 0.45);
+    border-bottom: 2px solid #1a0e07;
+}
+
+.event-top-banner-wrap {
+    border: 3px solid #362012;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+}
+
+.event-header-banner {
+    background: #eeddc0;
+    border: 2px solid #4a2e1b;
+    border-left: 6px solid #8c3314;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.35);
+}
+
+.content-card {
+    background: radial-gradient(ellipse at center, #fbf2df 55%, #e8d3ad 100%);
+    border: 3px solid #362012;
+    outline: 1px solid #5c3a22;
+    outline-offset: -8px;
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.62), inset 0 0 30px rgba(102, 65, 30, 0.16);
+}
+
+.card-ornament {
+    display: block;
+    width: 44px;
+    height: 44px;
+    background: url('assets/corner-star.svg') no-repeat center / contain;
+}
+.card-ornament-tl { top: 5px; left: 5px; }
+.card-ornament-tr { top: 5px; right: 5px; transform: scaleX(-1); }
+.card-ornament-bl { bottom: 5px; left: 5px; transform: scaleY(-1); }
+.card-ornament-br { bottom: 5px; right: 5px; transform: scale(-1, -1); }
+
+.card-header {
+    background: #2f1b0f;
+    border-bottom: 3px double #c28542;
+    padding: 1.1rem 2rem;
+}
+
+.card-header h1 {
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.card-body {
+    padding: 1.75rem 2rem;
+}
+
+.event-item {
+    border: 2px solid #5c3a22;
+    background: #fcf5e6;
+    box-shadow: 3px 3px 0 rgba(54, 32, 18, 0.18);
+}
+
+.seat-badge {
+    border-radius: 3px;
+    border: 1px solid #7a5536;
+}
+
+/* Stempel-Optik für ausgebuchte Gruppen im Western-Theme */
+.seat-badge.full {
+    background: rgba(153, 27, 27, 0.08);
+    color: #991b1b;
+    border: 2px dashed #991b1b;
+    border-radius: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    transform: rotate(-1.2deg);
+}
+
+.form-section-heading {
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: none;
+    padding-bottom: 1.15rem;
+    background: url('assets/divider-western.svg') no-repeat left bottom / 320px 18px;
+}
+
+.btn-primary {
+    border: 2px solid #362012;
+    box-shadow: 2px 2px 0 #362012;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-family: var(--font-heading);
+}
+
+.btn-secondary {
+    border: 2px solid #5c3a22;
+    font-family: var(--font-heading);
+}

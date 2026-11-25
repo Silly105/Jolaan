@@ -1,0 +1,137 @@
+@import url('../base.css');
+
+:root {
+    --font-heading: "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+    --font-body: "Segoe UI", system-ui, -apple-system, sans-serif;
+    --bg-body: #181a1e;
+    --bg-pattern: linear-gradient(180deg, rgba(14, 15, 18, 0.58) 0%, rgba(22, 18, 18, 0.72) 100%), url('assets/bg.jpg');
+    --bg-size: auto, 680px auto;
+    --bg-attachment: fixed;
+    --text-color: #1f1c1a;
+    --text-muted: #524b45;
+    --accent: #881313;
+    --accent-hover: #5c0b0b;
+    --accent-border: #b89558;
+    --header-bg: #16181c;
+    --header-text: #f3ede2;
+    --nav-bg: #22252b;
+    --nav-link: #e5d8c1;
+    --card-bg: #f3efe8;
+    --card-border: #6b6359;
+    --card-header-bg: #7a1212;
+    --card-header-text: #fbf6eb;
+    --banner-bg: #e7dfd2;
+    --item-bg: #faf7f2;
+    --badge-bg: #e8dfd1;
+    --badge-text: #6e1010;
+    --input-bg: #fcfaf6;
+    --input-text: #1c1917;
+    --input-border: #8c8275;
+    --input-radius: 2px;
+    --focus-ring: rgba(136, 19, 19, 0.22);
+    --btn-bg: #881313;
+    --btn-hover: #5e0c0c;
+    --btn-text: #fbf6eb;
+    --btn-sec-bg: #ebe4d8;
+    --btn-sec-text: #292524;
+    --btn-sec-hover: #ded4c3;
+    --btn-radius: 3px;
+    --radius: 3px;
+}
+
+.site-header {
+    background: linear-gradient(180deg, #111317 0%, #1d2026 100%);
+    border-bottom: 3px solid #9c7c44;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
+}
+
+.brand-title {
+    font-variant: small-caps;
+    letter-spacing: 0.08em;
+    color: #f5ebd8;
+    text-shadow: 0 2px 6px rgba(0, 0, 0, 0.75);
+}
+
+.top-nav {
+    background: linear-gradient(90deg, #2b1010 0%, #3d1515 50%, #2b1010 100%);
+    border-top: 1px solid rgba(194, 155, 97, 0.45);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.6);
+}
+
+.event-top-banner-wrap {
+    border: 2px solid #6b6359;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+}
+
+.event-header-banner {
+    background: linear-gradient(180deg, #ebe3d5 0%, #e1d6c3 100%);
+    border: 1px solid #8a7f70;
+    border-left: 6px solid #881313;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+
+.content-card {
+    background:
+        radial-gradient(ellipse at center, #f6f2eb 55%, #e5ddd0 100%);
+    border: 2px solid #575047;
+    outline: 1px solid rgba(140, 128, 110, 0.6);
+    outline-offset: -6px;
+    box-shadow: 0 12px 34px rgba(0, 0, 0, 0.62), inset 0 0 24px rgba(70, 58, 44, 0.12);
+    overflow: visible;
+}
+
+.card-ornament {
+    display: block;
+    width: 38px;
+    height: 38px;
+    background: url('assets/corner-iron.svg') no-repeat center / contain;
+}
+.card-ornament-tl { top: -4px; left: -4px; }
+.card-ornament-tr { top: -4px; right: -4px; transform: scaleX(-1); }
+.card-ornament-bl { bottom: -4px; left: -4px; transform: scaleY(-1); }
+.card-ornament-br { bottom: -4px; right: -4px; transform: scale(-1, -1); }
+
+.card-header {
+    background: linear-gradient(180deg, #871414 0%, #590c0c 100%);
+    border-bottom: 3px double #c29b61;
+    padding: 1.1rem 1.75rem;
+}
+
+.card-header h1 {
+    font-variant: small-caps;
+    letter-spacing: 0.06em;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.event-item {
+    border: 1px solid #9c9182;
+    border-left: 5px solid #881313;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.08);
+}
+
+.form-section-heading {
+    font-variant: small-caps;
+    letter-spacing: 0.05em;
+    font-size: 1.22rem;
+    border-bottom: none;
+    padding-bottom: 1.1rem;
+    background: url('assets/divider-sword.svg') no-repeat left bottom / 300px 15px;
+}
+
+.btn-primary {
+    background: linear-gradient(180deg, #991b1b 0%, #6b0f0f 100%);
+    border: 1px solid #450a0a;
+    box-shadow: inset 0 1px 0 rgba(255, 235, 200, 0.3), 0 2px 5px rgba(0, 0, 0, 0.3);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 0.9rem;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(180deg, #7f1d1d 0%, #4c0808 100%);
+}
+
+.btn-secondary {
+    border: 1px solid #78716c;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}

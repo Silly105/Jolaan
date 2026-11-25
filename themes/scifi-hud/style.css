@@ -1,0 +1,179 @@
+@import url('../base.css');
+
+:root {
+    --font-heading: "Segoe UI", Bahnschrift, "Trebuchet MS", Consolas, sans-serif;
+    --font-body: "Segoe UI", system-ui, -apple-system, sans-serif;
+    --bg-body: #060c17;
+    --bg-pattern: radial-gradient(ellipse at 50% 0%, rgba(14, 165, 233, 0.14) 0%, rgba(4, 8, 16, 0.78) 80%), url('assets/bg.jpg');
+    --bg-size: auto, 760px auto;
+    --bg-attachment: fixed;
+    --text-color: #dbeafe;
+    --text-muted: #93b4d4;
+    --accent: #38bdf8;
+    --accent-hover: #7dd3fc;
+    --accent-border: #0ea5e9;
+    --header-bg: #050b14;
+    --header-text: #e0f2fe;
+    --nav-bg: #091526;
+    --nav-link: #7dd3fc;
+    --card-bg: rgba(10, 20, 36, 0.93);
+    --card-border: #1e4b73;
+    --card-header-bg: #0b1e36;
+    --card-header-text: #38bdf8;
+    --banner-bg: rgba(12, 30, 53, 0.9);
+    --item-bg: rgba(13, 27, 48, 0.9);
+    --badge-bg: rgba(14, 165, 233, 0.16);
+    --badge-text: #7dd3fc;
+    --badge-full-bg: rgba(239, 68, 68, 0.18);
+    --badge-full-text: #fca5a5;
+    --badge-full-border: rgba(248, 113, 113, 0.55);
+    --req-color: #f59e0b;
+    --input-bg: #071120;
+    --input-text: #e2f1ff;
+    --input-border: #23537d;
+    --input-radius: 2px;
+    --invalid-bg: rgba(127, 29, 29, 0.35);
+    --focus-ring: rgba(34, 211, 238, 0.28);
+    --waitlist-bg: rgba(120, 53, 15, 0.35);
+    --waitlist-border: #f59e0b;
+    --waitlist-text: #fde68a;
+    --alert-danger-bg: rgba(127, 29, 29, 0.4);
+    --alert-danger-border: #ef4444;
+    --alert-danger-text: #fecaca;
+    --alert-success-bg: rgba(6, 78, 59, 0.45);
+    --alert-success-border: #10b981;
+    --alert-success-text: #a7f3d0;
+    --alert-info-bg: rgba(12, 74, 110, 0.45);
+    --alert-info-border: #38bdf8;
+    --alert-info-text: #bae6fd;
+    --btn-bg: #0284c7;
+    --btn-hover: #0ea5e9;
+    --btn-text: #f0f9ff;
+    --btn-sec-bg: rgba(15, 33, 58, 0.95);
+    --btn-sec-text: #7dd3fc;
+    --btn-sec-hover: rgba(22, 50, 86, 0.95);
+    --btn-radius: 0px;
+    --radius: 2px;
+}
+
+.site-header {
+    background:
+        repeating-linear-gradient(0deg, rgba(34, 211, 238, 0.03) 0px, rgba(34, 211, 238, 0.03) 1px, transparent 1px, transparent 4px),
+        linear-gradient(180deg, #040912 0%, #0a172b 100%);
+    border-bottom: 2px solid #0ea5e9;
+    box-shadow: 0 4px 24px rgba(14, 165, 233, 0.2);
+}
+
+.brand-title {
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #7dd3fc;
+    text-shadow: 0 0 12px rgba(56, 189, 248, 0.45);
+}
+
+.brand-subtitle {
+    font-family: Consolas, monospace;
+    letter-spacing: 0.06em;
+    color: #93c5fd;
+}
+
+.top-nav {
+    border-top: 1px solid rgba(56, 189, 248, 0.25);
+}
+
+.nav-links a {
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    font-size: 0.85rem;
+}
+
+.event-top-banner-wrap {
+    border: 1px solid #0ea5e9;
+    box-shadow: 0 0 22px rgba(14, 165, 233, 0.22);
+    clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+}
+
+.event-header-banner {
+    border: 1px solid #1e4b73;
+    border-left: 4px solid #f59e0b;
+    box-shadow: 0 0 18px rgba(0, 0, 0, 0.45);
+}
+
+.content-card {
+    border: 1px solid #1e527d;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.7), 0 0 26px rgba(14, 165, 233, 0.14);
+    clip-path: polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px);
+}
+
+.card-ornament {
+    display: block;
+    width: 40px;
+    height: 40px;
+    background: url('assets/corner-hud.svg') no-repeat center / contain;
+}
+.card-ornament-tl { top: 2px; left: 2px; }
+.card-ornament-tr { top: 2px; right: 2px; transform: scaleX(-1); }
+.card-ornament-bl { bottom: 2px; left: 2px; transform: scaleY(-1); }
+.card-ornament-br { bottom: 2px; right: 2px; transform: scale(-1, -1); }
+
+.card-header {
+    background:
+        repeating-linear-gradient(0deg, rgba(56, 189, 248, 0.05) 0px, rgba(56, 189, 248, 0.05) 1px, transparent 1px, transparent 3px),
+        linear-gradient(90deg, #0b223d 0%, #09172a 100%);
+    border-bottom: 1px solid #0ea5e9;
+    padding: 1.05rem 1.85rem;
+}
+
+.card-header h1 {
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 1.22rem;
+    text-shadow: 0 0 10px rgba(56, 189, 248, 0.35);
+}
+
+.event-item {
+    border: 1px solid #1e4b73;
+    border-left: 3px solid #22d3ee;
+    clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 0 100%);
+}
+
+.seat-badge, .countdown-box {
+    font-family: Consolas, "Courier New", monospace;
+    border-radius: 2px;
+}
+
+.form-section-heading {
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    font-size: 1.04rem;
+    color: #38bdf8;
+    border-bottom: none;
+    padding-bottom: 1rem;
+    background: url('assets/divider-hud.svg') no-repeat left bottom / 340px 15px;
+}
+
+select.form-control option {
+    background-color: #0b182b;
+    color: #e2f1ff;
+}
+
+.btn {
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    font-size: 0.88rem;
+    clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+}
+
+.btn-primary {
+    background: linear-gradient(90deg, #0284c7 0%, #0891b2 100%);
+    border: 1px solid #38bdf8;
+    box-shadow: 0 0 14px rgba(14, 165, 233, 0.35);
+}
+
+.btn-primary:hover {
+    background: linear-gradient(90deg, #0ea5e9 0%, #06b6d4 100%);
+}
+
+.btn-secondary {
+    border: 1px solid #23537d;
+}

@@ -10,6 +10,9 @@ $currentParams['lang'] = 'de';
 $langUrlDe = '?' . http_build_query($currentParams);
 $currentParams['lang'] = 'en';
 $langUrlEn = '?' . http_build_query($currentParams);
+
+$headerMode = $headerMode ?? 'compact';
+$bannerImage = $bannerImage ?? '';
 ?>
 <!DOCTYPE html>
 <html lang="<?= e(I18n::lang()) ?>">
@@ -22,8 +25,9 @@ $langUrlEn = '?' . http_build_query($currentParams);
     <?php endif; ?>
     <link rel="stylesheet" href="<?= e($themeCssUrl) ?>">
 </head>
-<body class="theme-<?= e($activeTheme) ?>">
+<body class="theme-<?= e($activeTheme) ?> header-mode-<?= e($headerMode) ?>">
     <header class="site-header">
+        <div class="header-atmosphere" aria-hidden="true"></div>
         <div class="container header-inner">
             <div class="brand">
                 <a href="index.php" class="brand-link">
@@ -69,6 +73,12 @@ $langUrlEn = '?' . http_build_query($currentParams);
     </header>
 
     <main class="container main-layout">
+        <?php if ($bannerImage !== ''): ?>
+            <div class="event-top-banner-wrap">
+                <img src="<?= e($bannerImage) ?>" alt="<?= e($event['title'] ?? $siteTitle) ?>" class="event-top-banner-img">
+            </div>
+        <?php endif; ?>
+
         <?php if ($headerText !== ''): ?>
             <section class="event-header-banner">
                 <?= nl2br(e($headerText)) ?>
@@ -76,6 +86,10 @@ $langUrlEn = '?' . http_build_query($currentParams);
         <?php endif; ?>
 
         <article class="content-card">
+            <span class="card-ornament card-ornament-tl" aria-hidden="true"></span>
+            <span class="card-ornament card-ornament-tr" aria-hidden="true"></span>
+            <span class="card-ornament card-ornament-bl" aria-hidden="true"></span>
+            <span class="card-ornament card-ornament-br" aria-hidden="true"></span>
             <header class="card-header">
                 <h1><?= e($title) ?></h1>
             </header>

@@ -410,7 +410,7 @@ ob_start();
             </select>
 
             <!-- Deutlicher orangener Hinweis-Kasten, sobald eine ausgebuchte Gruppe mit Warteliste ausgewählt wird -->
-            <div id="waitlist_notice_box" style="display:none;margin-top:0.75rem;padding:0.9rem 1.1rem;background:#fffbeb;border:2px solid #f59e0b;border-radius:6px;color:#92400e;font-weight:600;font-size:0.92rem;">
+            <div id="waitlist_notice_box" class="waitlist-notice-box" style="display:none;">
                 <?= e(I18n::t('reg.waitlist_warning')) ?>
             </div>
         </div>

@@ -93,7 +93,7 @@ class SettingsController
             }
 
             $keys = [
-                'site_title', 'site_subtitle', 'default_theme',
+                'site_title', 'site_subtitle', 'default_theme', 'default_header_mode',
                 'index_intro_de', 'index_intro_en',
                 'storage_notice_de', 'storage_notice_en',
                 'main_site_url', 'main_site_label_de', 'main_site_label_en',
@@ -161,10 +161,12 @@ class SettingsController
             exit;
         }
 
-        $themes      = Theme::availableThemes();
-        $curTheme    = (string)Database::getSetting('default_theme', 'western-seal');
-        $siteLogo    = (string)Database::getSetting('site_logo', '');
-        $siteFavicon = (string)Database::getSetting('site_favicon', '');
+        $themesGrouped = Theme::availableThemesGrouped();
+        $headerModes   = Theme::headerModes();
+        $curTheme      = (string)Database::getSetting('default_theme', 'western-seal');
+        $curHeaderMode = (string)Database::getSetting('default_header_mode', 'compact');
+        $siteLogo      = (string)Database::getSetting('site_logo', '');
+        $siteFavicon   = (string)Database::getSetting('site_favicon', '');
 
         $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
         $currentDomainUrl = $scheme . '://' . ($_SERVER['HTTP_HOST'] ?? 'deine-domain.de');
@@ -193,18 +195,36 @@ class SettingsController
                         </div>
                     </div>
 
-                    <div class="grid-3">
+                    <div class="grid-2">
                         <div class="form-group">
                             <label for="default_theme">Globales Standard-Theme der Seite (pro Veranstaltung überschreibbar)</label>
                             <select id="default_theme" name="default_theme">
-                                <?php foreach ($themes as $slug => $tMeta): ?>
-                                    <option value="<?= e($slug) ?>" <?= $curTheme === $slug ? 'selected' : '' ?>>
-                                        <?= e($tMeta['name']) ?>
-                                    </option>
+                                <?php foreach ($themesGrouped as $grp): if (empty($grp['themes'])) continue; ?>
+                                    <optgroup label="<?= e($grp['label']) ?>">
+                                        <?php foreach ($grp['themes'] as $slug => $tMeta): ?>
+                                            <option value="<?= e($slug) ?>" <?= $curTheme === $slug ? 'selected' : '' ?>>
+                                                <?= e($tMeta['name']) ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </optgroup>
                                 <?php endforeach; ?>
                             </select>
                             <div class="help-text">Gilt für Startseite, Orga-Backend und alle Veranstaltungen ohne eigenes Theme.</div>
                         </div>
+                        <div class="form-group">
+                            <label for="default_header_mode">Globaler Standard Header-Modus (pro Veranstaltung überschreibbar)</label>
+                            <select id="default_header_mode" name="default_header_mode">
+                                <?php foreach ($headerModes as $mKey => $mLabel): ?>
+                                    <option value="<?= e($mKey) ?>" <?= $curHeaderMode === $mKey ? 'selected' : '' ?>>
+                                        <?= e($mLabel) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <div class="help-text">Steuert die Darstellung des oberen Seitenkopfes auf der Startseite und bei Veranstaltungen.</div>
+                        </div>
+                    </div>
+
+                    <div class="grid-2">
                         <div class="form-group">
                             <label for="site_logo_file">Globales Header-Logo (falls Veranstaltung kein eigenes Logo hat)</label>
                             <input type="file" id="site_logo_file" name="site_logo_file" accept=".png,.jpg,.jpeg,.gif,.webp,.svg">

@@ -1,0 +1,8 @@
+{
+    "name": "Orbital Terminal (Generisches Sci-Fi / Dark HUD)",
+    "description": "Dunkles Raumstations-Interface mit abgeschrägten 45°-Konsolenecken, Scanlines, dunklen Eingabefeldern und leuchtenden Cyan-/Amber-Akzenten.",
+    "category": "genre",
+    "sort_order": 150,
+    "preview_bg": "#081221",
+    "preview_accent": "#22d3ee"
+}

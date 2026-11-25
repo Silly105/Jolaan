@@ -1,0 +1,151 @@
+@import url('../base.css');
+
+:root {
+    --font-heading: "Gill Sans", "Century Gothic", "Trebuchet MS", Optima, sans-serif;
+    --font-body: "Segoe UI", Optima, Candara, sans-serif;
+    --bg-body: #0a1c17;
+    --bg-pattern: linear-gradient(180deg, rgba(7, 20, 17, 0.58) 0%, rgba(7, 20, 17, 0.72) 100%), url('assets/bg.jpg');
+    --bg-size: auto, 640px auto;
+    --bg-attachment: fixed;
+    --text-color: #161b19;
+    --text-muted: #525954;
+    --accent: #0f3b31;
+    --accent-hover: #08241d;
+    --accent-border: #c5a059;
+    --header-bg: #081814;
+    --header-text: #f6e7c6;
+    --nav-bg: #0e2620;
+    --nav-link: #e5cb94;
+    --card-bg: #fbf8f0;
+    --card-border: #c5a059;
+    --card-header-bg: #0c241e;
+    --card-header-text: #f3deb0;
+    --banner-bg: #f4ecda;
+    --item-bg: #fffdf8;
+    --badge-bg: #f4ecda;
+    --badge-text: #0f3b31;
+    --input-bg: #ffffff;
+    --input-text: #141917;
+    --input-border: #c4b087;
+    --input-radius: 0px;
+    --focus-ring: rgba(197, 160, 89, 0.28);
+    --btn-bg: #0e2b23;
+    --btn-hover: #174236;
+    --btn-text: #f6e3b8;
+    --btn-sec-bg: #fbf8f0;
+    --btn-sec-text: #0e2b23;
+    --btn-sec-hover: #f2e7ce;
+    --btn-radius: 0px;
+    --radius: 0px;
+}
+
+.site-header {
+    background: linear-gradient(180deg, #06120f 0%, #0d241e 100%);
+    border-bottom: 4px double #c5a059;
+    box-shadow: 0 8px 26px rgba(0, 0, 0, 0.65);
+}
+
+.brand-title {
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    font-weight: 600;
+    color: #f4dfac;
+}
+
+.brand-subtitle {
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-size: 0.78rem;
+    color: #c5a059;
+}
+
+.top-nav {
+    border-top: 1px solid rgba(197, 160, 89, 0.45);
+}
+
+.nav-links a {
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    font-size: 0.84rem;
+}
+
+.event-top-banner-wrap {
+    border: 2px solid #c5a059;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.58);
+}
+
+.event-header-banner {
+    border: 1px solid #c5a059;
+    border-left: 5px solid #c5a059;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+.content-card {
+    border: 2px solid #b8903e;
+    outline: 1px solid #c5a059;
+    outline-offset: -8px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.65);
+}
+
+.card-ornament {
+    display: block;
+    width: 46px;
+    height: 46px;
+    background: url('assets/corner-deco.svg') no-repeat center / contain;
+}
+.card-ornament-tl { top: 4px; left: 4px; }
+.card-ornament-tr { top: 4px; right: 4px; transform: scaleX(-1); }
+.card-ornament-bl { bottom: 4px; left: 4px; transform: scaleY(-1); }
+.card-ornament-br { bottom: 4px; right: 4px; transform: scale(-1, -1); }
+
+.card-header {
+    background: linear-gradient(90deg, #091c17 0%, #12332a 50%, #091c17 100%);
+    border-bottom: 3px double #c5a059;
+    padding: 1.15rem 2rem;
+}
+
+.card-header h1 {
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    font-weight: 600;
+    font-size: 1.25rem;
+}
+
+.card-body {
+    padding: 1.75rem 2rem;
+}
+
+.event-item {
+    border: 1px solid #c5a059;
+    box-shadow: inset 0 0 0 3px #fbf8f0, inset 0 0 0 4px rgba(197, 160, 89, 0.45);
+}
+
+.event-title {
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.form-section-heading {
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 1.05rem;
+    border-bottom: none;
+    padding-bottom: 1.15rem;
+    background: url('assets/divider-deco.svg') no-repeat left bottom / 320px 18px;
+}
+
+.btn-primary {
+    border: 1px solid #c5a059;
+    outline: 1px solid rgba(197, 160, 89, 0.45);
+    outline-offset: -4px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 0.86rem;
+}
+
+.btn-secondary {
+    border: 1px solid #b8903e;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    font-size: 0.84rem;
+}

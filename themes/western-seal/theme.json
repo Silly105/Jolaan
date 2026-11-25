@@ -1,6 +1,8 @@
 {
     "name": "Western Forest (Waldgrün)",
-    "description": "Harmonisches Waldgrün-Farbkonzept (#eaf7cb / #255E00) in modernem, mobilfreundlichem Gewand.",
+    "description": "Harmonisches Waldgrün-Farbkonzept (#eaf7cb / #255E00) in schlichtem, klarem Gewand.",
+    "category": "clean",
+    "sort_order": 10,
     "preview_bg": "#eaf7cb",
     "preview_accent": "#255E00"
 }

@@ -5,7 +5,7 @@ namespace App\Core;
 
 class Version
 {
-    public const CURRENT = '0.9.005';
+    public const CURRENT = '0.9.006';
 
     /**
      * Fortlaufende Änderungshistorie & Migrations-Schritte.
@@ -87,6 +87,17 @@ class Version
                     '100 % nativer SMTP-Client (STARTTLS / SSL/TLS / AUTH LOGIN) ohne PHPMailer inkl. Testmail-Versand und Hinweistext zum Standard-Webserver-Versand in den Seiteneinstellungen',
                     'Optische Trennung der Menügruppen im Backend durch horizontale Linien oberhalb und unterhalb jeder Gruppenüberschrift',
                     'Emojis aus sämtlichen Seiten-/Bereichsüberschriften, Tabellen-Spaltenköpfen, Checkbox-Labels und Hilfetexten im Backend entfernt',
+                ],
+            ],
+            '0.9.006' => [
+                'date'    => '2026-11-25',
+                'title'   => 'Großes Design- & Theme-Update: 9 neue Themes (Schlicht & Genre), 3 Header-Modi & Veranstaltungs-Bannerbild',
+                'changes' => [
+                    'Drei neue schlichte Farb-Themes inkl. Backend-Farbsynchronisation: „Fire & Ash“ (Rot/Schwarz), „Arctic Storm“ (Blau/Weiß) und „Mystic Twilight“ (Violett)',
+                    'Sechs aufwändige Genre- & Erlebnis-Themes mit eigenen Hintergrundtexturen, SVG-Ornamentik und eigenen Gestaltungsparadigmen: „Eisen & Banner“ (Fantasy-Kampf), „Reisechronik & Pergament“ (Fantasy-Abenteuer), „Art Déco & Salon“ (1920er), „Frontier Gazette“ (Western), „Orbital Terminal“ (Sci-Fi Dark HUD) und „Arkham Grimoire“ (Mystery / Cthulhu)',
+                    'Drei wählbare Header-Modi (global einstellbar und pro Veranstaltung überschreibbar): Kompakte Kopfleiste, Zentrierter Wappen-/Banner-Header und Großer Hero-Header',
+                    'Neues optionales, individuelles Veranstaltungs-Bannerbild (Upload in den Con-Einstellungen), das in voller Formularbreite direkt oberhalb des Einführungstextes über der Anmeldung angezeigt wird',
+                    'Übersichtliche Gruppierung der Theme-Auswahl in „Schlichte Farb-Themes“ und „Aufwändige Genre- & Erlebnis-Themes“',
                 ],
             ],
         ];

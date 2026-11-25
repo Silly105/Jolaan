@@ -201,6 +201,7 @@ class EventAdminController
             $unlockPassword  = trim((string)($_POST['unlock_password'] ?? ''));
             $isBilingual     = isset($_POST['is_bilingual']) ? 1 : 0;
             $theme           = trim((string)($_POST['theme'] ?? ''));
+            $headerMode      = trim((string)($_POST['header_mode'] ?? ''));
             $headerTextDe    = trim((string)($_POST['header_text_de'] ?? ''));
             $headerTextEn    = trim((string)($_POST['header_text_en'] ?? ''));
             $flyerUrl        = trim((string)($_POST['flyer_url'] ?? ''));
@@ -229,6 +230,28 @@ class EventAdminController
                 $headerLogoPath = '';
             }
 
+            // Optionaler Upload eines individuellen Banner-/Stimmungsbildes über der Anmeldung (volle Formularbreite)
+            $bannerImagePath = $event['banner_image_path'] ?? '';
+            if (!empty($_FILES['banner_image']['name'])) {
+                $checkBanner = UploadValidator::validateAndStoreImage(
+                    $_FILES['banner_image'],
+                    'event_banner',
+                    4194304,
+                    3000,
+                    1400,
+                    ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg']
+                );
+                if ($checkBanner['ok']) {
+                    $bannerImagePath = $checkBanner['path'];
+                } else {
+                    $_SESSION['flash_error'] = 'Bannerbild-Upload abgelehnt: ' . $checkBanner['error'];
+                    header('Location: admin.php?module=events&action=' . ($isNew ? 'new' : 'edit&id=' . $id));
+                    exit;
+                }
+            } elseif (isset($_POST['remove_banner_image'])) {
+                $bannerImagePath = '';
+            }
+
             $params = [
                 'title'     => $title !== '' ? $title : 'Unbenannte Veranstaltung',
                 'subtitle'  => $subtitle,
@@ -246,7 +269,9 @@ class EventAdminController
                 'unlock'    => $unlockPassword,
                 'biling'    => $isBilingual,
                 'theme'     => $theme !== '' ? $theme : null,
+                'hmode'     => $headerMode !== '' ? $headerMode : null,
                 'hlogo'     => $headerLogoPath,
+                'bimg'      => $bannerImagePath,
                 'htext_de'  => $headerTextDe,
                 'htext_en'  => $headerTextEn,
                 'flyer'     => $flyerUrl,
@@ -257,8 +282,8 @@ class EventAdminController
             if ($isNew) {
                 Database::query(
                     "INSERT INTO {$tEvents}
-                     (title, subtitle, start_date, end_date, countdown_target, show_on_index, show_countdown, location_prefix, location, location_suffix, maps_url, status, waitlist_enabled, unlock_password, is_bilingual, theme, header_logo_path, header_text_de, header_text_en, flyer_url, forum_url, admin_email)
-                     VALUES (:title, :subtitle, :sdate, :edate, :cdtarget, :sindex, :scd, :lpre, :loc, :lsuf, :maps, :status, :waitlist, :unlock, :biling, :theme, :hlogo, :htext_de, :htext_en, :flyer, :forum, :aemail)",
+                     (title, subtitle, start_date, end_date, countdown_target, show_on_index, show_countdown, location_prefix, location, location_suffix, maps_url, status, waitlist_enabled, unlock_password, is_bilingual, theme, header_mode, header_logo_path, banner_image_path, header_text_de, header_text_en, flyer_url, forum_url, admin_email)
+                     VALUES (:title, :subtitle, :sdate, :edate, :cdtarget, :sindex, :scd, :lpre, :loc, :lsuf, :maps, :status, :waitlist, :unlock, :biling, :theme, :hmode, :hlogo, :bimg, :htext_de, :htext_en, :flyer, :forum, :aemail)",
                     $params
                 );
                 $newId = Database::lastInsertId();
@@ -277,7 +302,8 @@ class EventAdminController
                      countdown_target = :cdtarget, show_on_index = :sindex, show_countdown = :scd,
                      location_prefix = :lpre, location = :loc, location_suffix = :lsuf, maps_url = :maps,
                      status = :status, waitlist_enabled = :waitlist, unlock_password = :unlock, is_bilingual = :biling,
-                     theme = :theme, header_logo_path = :hlogo, header_text_de = :htext_de, header_text_en = :htext_en,
+                     theme = :theme, header_mode = :hmode, header_logo_path = :hlogo, banner_image_path = :bimg,
+                     header_text_de = :htext_de, header_text_en = :htext_en,
                      flyer_url = :flyer, forum_url = :forum, admin_email = :aemail
                      WHERE id = :id",
                     $params
@@ -288,33 +314,36 @@ class EventAdminController
             }
         }
 
-        $allEvents = EventRepository::all();
-        $themes    = Theme::availableThemes();
+        $allEvents     = EventRepository::all();
+        $themesGrouped = Theme::availableThemesGrouped();
+        $headerModes   = Theme::headerModes();
 
         $ev = $event ?? [
-            'id'               => 0,
-            'title'            => '',
-            'subtitle'         => '',
-            'start_date'       => date('Y-m-d', strtotime('+30 days')),
-            'end_date'         => date('Y-m-d', strtotime('+32 days')),
-            'countdown_target' => '',
-            'show_on_index'    => 1,
-            'show_countdown'   => 0,
-            'location_prefix'  => '',
-            'location'         => '',
-            'location_suffix'  => '',
-            'maps_url'         => '',
-            'status'           => 'open',
-            'waitlist_enabled' => 1,
-            'unlock_password'  => bin2hex(random_bytes(4)),
-            'is_bilingual'     => 0,
-            'theme'            => '',
-            'header_logo_path' => '',
-            'header_text_de'   => '',
-            'header_text_en'   => '',
-            'flyer_url'        => '',
-            'forum_url'        => '',
-            'admin_email'      => (string)Database::getSetting('mail_from_address', ''),
+            'id'                => 0,
+            'title'             => '',
+            'subtitle'          => '',
+            'start_date'        => date('Y-m-d', strtotime('+30 days')),
+            'end_date'          => date('Y-m-d', strtotime('+32 days')),
+            'countdown_target'  => '',
+            'show_on_index'     => 1,
+            'show_countdown'    => 0,
+            'location_prefix'   => '',
+            'location'          => '',
+            'location_suffix'   => '',
+            'maps_url'          => '',
+            'status'            => 'open',
+            'waitlist_enabled'  => 1,
+            'unlock_password'   => bin2hex(random_bytes(4)),
+            'is_bilingual'      => 0,
+            'theme'             => '',
+            'header_mode'       => '',
+            'header_logo_path'  => '',
+            'banner_image_path' => '',
+            'header_text_de'    => '',
+            'header_text_en'    => '',
+            'flyer_url'         => '',
+            'forum_url'         => '',
+            'admin_email'       => (string)Database::getSetting('mail_from_address', ''),
         ];
 
         $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
@@ -485,24 +514,56 @@ class EventAdminController
                         <div class="form-group">
                             <label for="theme">Theme für diese Veranstaltung</label>
                             <select id="theme" name="theme">
-                                <option value="">🎨 Globales Standard-Theme der Webseite verwenden</option>
-                                <?php foreach ($themes as $slug => $tMeta): ?>
-                                    <option value="<?= e($slug) ?>" <?= ($ev['theme'] ?? '') === $slug ? 'selected' : '' ?>>
-                                        <?= e($tMeta['name']) ?>
-                                    </option>
+                                <option value="">Globales Standard-Theme der Webseite verwenden</option>
+                                <?php foreach ($themesGrouped as $grp): if (empty($grp['themes'])) continue; ?>
+                                    <optgroup label="<?= e($grp['label']) ?>">
+                                        <?php foreach ($grp['themes'] as $slug => $tMeta): ?>
+                                            <option value="<?= e($slug) ?>" <?= ($ev['theme'] ?? '') === $slug ? 'selected' : '' ?>>
+                                                <?= e($tMeta['name']) ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </optgroup>
                                 <?php endforeach; ?>
                             </select>
                             <div class="help-text">Überschreibt das globale Seitentheme beim Aufruf dieses Anmeldeformulars.</div>
                         </div>
                         <div class="form-group">
-                            <label for="header_logo">Optionales Veranstaltungs-Logo im Header</label>
+                            <label for="header_mode">Header-Modus für diese Veranstaltung</label>
+                            <select id="header_mode" name="header_mode">
+                                <option value="">Globalen Standard Header-Modus verwenden</option>
+                                <?php foreach ($headerModes as $mKey => $mLabel): ?>
+                                    <option value="<?= e($mKey) ?>" <?= ($ev['header_mode'] ?? '') === $mKey ? 'selected' : '' ?>>
+                                        <?= e($mLabel) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <div class="help-text">Legt fest, ob die Kopfleiste kompakt, als zentriertes Wappen/Banner oder als großer Hero-Header dargestellt wird.</div>
+                        </div>
+                    </div>
+
+                    <div class="grid-2">
+                        <div class="form-group">
+                            <label for="header_logo">Optionales Veranstaltungs-Logo im oberen Seitenkopf</label>
                             <input type="file" id="header_logo" name="header_logo" accept=".png,.jpg,.jpeg,.gif,.webp,.svg">
-                            <div class="help-text">Erlaubte Formate: PNG, JPG, WEBP, GIF, SVG &middot; Max. 2 MB &middot; Max. Auflösung: 2500×800 px (Empfohlen: Querformat ca. 800×150 px bis 1600×300 px).</div>
+                            <div class="help-text">Erlaubt: PNG, JPG, WEBP, GIF, SVG &middot; Max. 2 MB &middot; Max. 2500×800 px (Empfohlen: Querformat oder Wappen mit transparentem Hintergrund).</div>
                             <?php if (!empty($ev['header_logo_path'])): ?>
                                 <div style="margin-top:0.5rem;display:flex;align-items:center;gap:1rem;">
                                     <img src="<?= e($ev['header_logo_path']) ?>" alt="Logo" style="max-height:48px;border-radius:4px;border:1px solid #cbd5e1;">
                                     <label style="font-weight:400;margin:0;">
                                         <input type="checkbox" name="remove_header_logo" value="1"> Logo entfernen
+                                    </label>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                        <div class="form-group">
+                            <label for="banner_image">Optionales Bild über dem Einführungstext (in voller Formularbreite)</label>
+                            <input type="file" id="banner_image" name="banner_image" accept=".png,.jpg,.jpeg,.gif,.webp,.svg">
+                            <div class="help-text">Wird auf der Anmeldeseite direkt oberhalb des Einführungstextes in exakt derselben Breite wie das Anmeldeformular (980 px) angezeigt. Max. 4 MB &middot; Max. 3000×1400 px (Empfohlen: ca. 980×280 px bis 1960×560 px).</div>
+                            <?php if (!empty($ev['banner_image_path'])): ?>
+                                <div style="margin-top:0.5rem;display:flex;align-items:center;gap:1rem;">
+                                    <img src="<?= e($ev['banner_image_path']) ?>" alt="Veranstaltungsbild" style="max-height:56px;max-width:180px;object-fit:cover;border-radius:4px;border:1px solid #cbd5e1;">
+                                    <label style="font-weight:400;margin:0;">
+                                        <input type="checkbox" name="remove_banner_image" value="1"> Bild entfernen
                                     </label>
                                 </div>
                             <?php endif; ?>

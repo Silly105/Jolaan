@@ -1,6 +1,8 @@
 {
-    "name": "Modern Clean (Schiefer & Blau)",
+    "name": "Modern Clean (Schiefer & Petrol)",
     "description": "Sachliches, klares und kontrastreiches Design für Vereinsveranstaltungen oder moderne Settings.",
+    "category": "clean",
+    "sort_order": 30,
     "preview_bg": "#f1f5f9",
     "preview_accent": "#0f766e"
 }

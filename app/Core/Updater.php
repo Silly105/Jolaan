@@ -216,5 +216,18 @@ class Updater
                 $pdo->exec("UPDATE {$tFields} SET `keep_on_prefill` = 1 WHERE `system_mapping` IN ('lastname', 'last_name', 'email') OR `field_key` IN ('nachname', 'strasse', 'plz', 'ort', 'plz_ort', 'email', 'telefon', 'handy', 'phone')");
             }
         }
+
+        if ($version === '0.9.006') {
+            $tEvents = Database::table('events');
+            if (!self::columnExists($tEvents, 'header_mode')) {
+                $pdo->exec("ALTER TABLE {$tEvents} ADD COLUMN `header_mode` VARCHAR(30) NULL DEFAULT NULL AFTER `theme`");
+            }
+            if (!self::columnExists($tEvents, 'banner_image_path')) {
+                $pdo->exec("ALTER TABLE {$tEvents} ADD COLUMN `banner_image_path` VARCHAR(255) NOT NULL DEFAULT '' AFTER `header_logo_path`");
+            }
+            if (Database::getSetting('default_header_mode') === null) {
+                Database::setSetting('default_header_mode', 'compact');
+            }
+        }
     }
 }

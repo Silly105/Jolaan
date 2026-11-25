@@ -1,0 +1,124 @@
+@import url('../base.css');
+
+:root {
+    --font-heading: Georgia, "Book Antiqua", "Palatino Linotype", serif;
+    --font-body: Georgia, "Segoe UI", serif;
+    --bg-body: #22150c;
+    --bg-pattern: radial-gradient(ellipse at 50% 20%, rgba(255, 214, 145, 0.12) 0%, rgba(16, 9, 4, 0.65) 85%), url('assets/bg.jpg');
+    --bg-size: auto, 820px auto;
+    --bg-attachment: fixed;
+    --text-color: #2c1d10;
+    --text-muted: #5e452b;
+    --accent: #234f2c;
+    --accent-hover: #17381e;
+    --accent-border: #b5893d;
+    --header-bg: #24150b;
+    --header-text: #fbf1da;
+    --nav-bg: #1c3a23;
+    --nav-link: #f3e4c2;
+    --card-bg: #fbf3de;
+    --card-border: #b8955b;
+    --card-header-bg: #234f2c;
+    --card-header-text: #fdf6e2;
+    --banner-bg: #f3e5c3;
+    --item-bg: #fdf8eb;
+    --badge-bg: #e4eedf;
+    --badge-text: #1e4626;
+    --input-bg: #fffcf4;
+    --input-text: #291a0d;
+    --input-border: #bfa06d;
+    --input-radius: 4px;
+    --focus-ring: rgba(35, 79, 44, 0.22);
+    --btn-bg: #8f1d18;
+    --btn-hover: #6d130f;
+    --btn-text: #fdf6e4;
+    --btn-sec-bg: #f7ecd2;
+    --btn-sec-text: #2c1d10;
+    --btn-sec-hover: #ebd9b2;
+    --btn-radius: 5px;
+    --radius: 6px;
+}
+
+.site-header {
+    background: linear-gradient(180deg, #1b0f07 0%, #2d1a0d 100%);
+    border-bottom: 3px solid #b5893d;
+    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.55);
+}
+
+.brand-title {
+    letter-spacing: 0.03em;
+    color: #f9e8c2;
+    text-shadow: 0 2px 6px rgba(0, 0, 0, 0.65);
+}
+
+.top-nav {
+    background: linear-gradient(90deg, #18331e 0%, #234f2c 50%, #18331e 100%);
+    border-top: 1px solid rgba(218, 180, 108, 0.45);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.45);
+}
+
+.event-top-banner-wrap {
+    border: 2px solid #b5893d;
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.5);
+}
+
+.event-header-banner {
+    background: radial-gradient(ellipse at center, #faefd4 40%, #ebd8b1 100%);
+    border: 1px solid #b8955b;
+    border-left: 5px solid #234f2c;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35), inset 0 0 18px rgba(138, 98, 41, 0.14);
+}
+
+.content-card {
+    background: radial-gradient(ellipse at center, #fdf8e8 52%, #eedcb6 100%);
+    border: 1px solid #a88246;
+    outline: 1px solid rgba(158, 119, 56, 0.45);
+    outline-offset: -10px;
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.58), inset 0 0 42px rgba(133, 88, 32, 0.2);
+}
+
+.card-ornament {
+    display: block;
+    width: 48px;
+    height: 48px;
+    background: url('assets/corner-vine.svg') no-repeat center / contain;
+}
+.card-ornament-tl { top: 4px; left: 4px; }
+.card-ornament-tr { top: 4px; right: 4px; transform: scaleX(-1); }
+.card-ornament-bl { bottom: 4px; left: 4px; transform: scaleY(-1); }
+.card-ornament-br { bottom: 4px; right: 4px; transform: scale(-1, -1); }
+
+.card-header {
+    background: linear-gradient(180deg, #275631 0%, #1b3d22 100%);
+    border-bottom: 2px solid #b5893d;
+    padding: 1.1rem 2rem;
+}
+
+.card-body {
+    padding: 1.75rem 2rem;
+}
+
+.event-item {
+    background: linear-gradient(180deg, #fffcf3 0%, #f6ebd1 100%);
+    border: 1px solid #c4a46d;
+    box-shadow: 0 3px 10px rgba(64, 40, 12, 0.1), inset 0 0 14px rgba(160, 120, 60, 0.08);
+}
+
+.form-section-heading {
+    border-bottom: none;
+    padding-bottom: 1.2rem;
+    background: url('assets/divider-compass.svg') no-repeat left bottom / 310px 18px;
+}
+
+/* Wachssiegel-Anmutung für den Haupt-Button */
+.btn-primary {
+    background: radial-gradient(circle at 35% 30%, #a92821 0%, #7c1712 85%);
+    border: 1px solid #590d0a;
+    box-shadow:
+        inset 0 0 0 2px rgba(248, 212, 166, 0.28),
+        0 3px 8px rgba(60, 18, 10, 0.38);
+}
+
+.btn-primary:hover {
+    background: radial-gradient(circle at 35% 30%, #8f1d18 0%, #610f0b 85%);
+}
