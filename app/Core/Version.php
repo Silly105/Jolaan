@@ -5,7 +5,7 @@ namespace App\Core;
 
 class Version
 {
-    public const CURRENT = '0.9.008';
+    public const CURRENT = '0.9.009';
 
     /**
      * Fortlaufende Änderungshistorie & Migrations-Schritte.
@@ -117,6 +117,14 @@ class Version
                     'Relativen CSS-Bildpfad für die Hintergrundtexturen (assets/bg.jpg) in allen 8 Genre-Themes korrigiert, sodass die Texturen nun überall sichtbar geladen werden',
                     'Theme „Keltensiegel“ in „Keltensiegel (Mittelalter / Fantasy – Feiern)“ umbenannt und obere Eckknoten sauber im hellgrünen Inhaltsbereich unterhalb der Kopfleiste ausgerichtet',
                     'Theme „Tanzball“ in „Feuervogel (Mittelalter / Fantasy – Tanzball)“ umbenannt: purpurroter Damast-Brokat im Header kombiniert mit hellem Perlweiß-/Seiden-Hintergrund hinter dem Anmeldeformular',
+                ],
+            ],
+            '0.9.009' => [
+                'date'    => '2026-11-26',
+                'title'   => 'Vollflächige Breitbild-Hintergründe ohne Kachel-Effekt für „Orbital Terminal“, „Eisen & Banner“ und „Arkham Grimoire“',
+                'changes' => [
+                    'Neue ruhige 16:9-Breitbild-Hintergrundgrafiken ohne kleinteiliges Kachelmuster für „Orbital Terminal“, „Eisen & Banner“ und „Arkham Grimoire“ erstellt',
+                    'Hintergrunddarstellung dieser drei Themes auf vollflächiges, nicht wiederholendes Cover-Layout (background-size: cover, fixed) umgestellt, um Kachelwiederholungen und Kantenbrüche vollständig zu beseitigen',
                 ],
             ],
         ];
