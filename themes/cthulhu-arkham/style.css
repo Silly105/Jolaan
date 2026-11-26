@@ -39,7 +39,7 @@
 
 body {
     background-color: #0b1917;
-    background-image: radial-gradient(ellipse at 50% 25%, rgba(38, 79, 71, 0.12) 0%, rgba(7, 15, 14, 0.42) 85%), url('assets/bg.jpg?v=0.9.009');
+    background-image: radial-gradient(ellipse at 50% 25%, rgba(38, 79, 71, 0.12) 0%, rgba(7, 15, 14, 0.42) 85%), url('assets/bg.jpg?v=1.0.0');
     background-size: cover, cover;
     background-position: center center, center center;
     background-repeat: no-repeat, no-repeat;

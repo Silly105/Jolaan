@@ -2,14 +2,18 @@
 .vscode/
 .idea/
 
-# Archiviertes Altsystem (falls innerhalb des Ordners abgelegt)
+# Interne Entwicklungs-Notizen & archiviertes Altsystem
 _alt/
+DEV_HISTORY.md
 
-# Sensible Konfigurationsdateien & Schlüssel des neuen Systems
+# Sensible Konfigurationsdateien, Schlüssel & Benutzer-Uploads
 storage/config/config.php
 storage/config/secret.key
+storage/config/reset_2fa.txt
 storage/uploads/*
 !storage/uploads/.gitkeep
+!storage/uploads/.htaccess
+!storage/uploads/index.html
 
 # Temporäres Testdaten-Skript
 seed_testdata.php

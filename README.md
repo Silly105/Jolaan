@@ -92,3 +92,15 @@ Wenn es eine neue Programmversion gibt:
   *Ohne die zugehörige `secret.key` können die in der Datenbank verschlüsselten E-Mail-Adressen, Telefonnummern und Gesundheitsdaten nicht wieder entschlüsselt werden!*
 - **Notfall-Reset bei verlorenem 2FA-Smartphone + verlorenen Notfallcodes:**
   Falls sich ein Teammitglied komplett ausgesperrt hat, lege per FTP im Ordner `storage/config/` eine einfache Textdatei mit dem Namen **`reset_2fa.txt`** an und schreibe als einzige Zeile die Login-E-Mail-Adresse der betroffenen Person hinein (oder `all` für alle Konten). Beim nächsten Login mit dem regulären Passwort wird 2FA für diesen Account zurückgesetzt und die Datei `reset_2fa.txt` sofort automatisch wieder gelöscht.
+
+---
+
+## Lizenz & Urheberrecht
+
+**(C) 2026 J. Gerhard**
+
+Dieses Projekt ist freie Open-Source-Software und wird unter der **[GNU General Public License v3.0 (GPL-3.0)](LICENSE)** veröffentlicht:
+- Kommerzielle und private Nutzung erlaubt
+- Veränderung und Weiterentwicklung erlaubt
+- Weitergabe nur unter Namensnennung und gleichen Lizenzbedingungen (`GPL-3.0` Copyleft)
+- Bereitstellung ohne Gewährleistung und Haftung

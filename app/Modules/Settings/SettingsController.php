@@ -910,7 +910,7 @@ class SettingsController
             exit;
         }
 
-        $dbVersion   = (string)Database::getSetting('db_version', '0.9.000');
+        $dbVersion   = (string)Database::getSetting('db_version', '1.0.0');
         $codeVersion = Version::CURRENT;
         $isUpToDate  = version_compare($dbVersion, $codeVersion, '>=');
         $history     = array_reverse(Version::history(), true);
@@ -948,6 +948,9 @@ class SettingsController
                 </div>
                 <p style="margin:1rem 0 0 0;font-size:0.88rem;color:#475569;">
                     Das Update-Modul erkennt Versionssprünge automatisch und führt alle dazwischenliegenden Datenbank-Migrationen chronologisch aus, ohne dass bestehende Daten verloren gehen.
+                </p>
+                <p style="margin:0.5rem 0 0 0;font-size:0.8rem;color:#64748b;">
+                    Urheberrecht &amp; Lizenz: <?= e(Version::COPYRIGHT) ?> &middot; Veröffentlicht unter der freien Lizenz <strong><?= e(Version::LICENSE) ?></strong>.
                 </p>
             </div>
         </div>

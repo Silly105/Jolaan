@@ -504,6 +504,9 @@ class AdminLayout
                         <a href="admin.php?module=profile" style="color:#93c5fd;margin-right:0.75rem;">Passwort & 2FA</a>
                         <a href="admin.php?action=logout">Abmelden</a>
                     </div>
+                    <div style="margin-top:0.55rem;font-size:0.7rem;opacity:0.55;">
+                        <?= e(Version::COPYRIGHT) ?> &middot; <?= e(Version::LICENSE) ?>
+                    </div>
                 </div>
             </aside>
 

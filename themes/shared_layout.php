@@ -112,6 +112,9 @@ $bannerImage = $bannerImage ?? '';
                 <?php endif; ?>
             </span>
         </div>
+        <div class="container footer-credit">
+            <?= e(\App\Core\Version::COPYRIGHT) ?> &middot; <?= e(\App\Core\Version::LICENSE) ?>
+        </div>
     </footer>
 </body>
 </html>
