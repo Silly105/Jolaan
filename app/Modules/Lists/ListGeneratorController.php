@@ -55,7 +55,7 @@ class ListGeneratorController
                 exit;
             } elseif ($subAction === 'delete_view') {
                 $delId = (int)($_POST['delete_view_id'] ?? 0);
-                Database::query("DELETE FROM {$tViews} WHERE id = :id", ['id' => $delId]);
+                Database::query("DELETE FROM {$tViews} WHERE id = :id AND (event_id = :eid OR event_id IS NULL)", ['id' => $delId, 'eid' => $eventId]);
                 $_SESSION['flash_success'] = 'Gespeicherte Liste wurde gelöscht.';
                 header("Location: admin.php?module=lists&event_id={$eventId}");
                 exit;
@@ -198,23 +198,33 @@ class ListGeneratorController
 
         $selectedCols = array_values(array_filter($config['columns'], fn($c) => isset($availableColumns[$c])));
 
-        // CSV-Export
+        // CSV-Export (mit Schutz gegen CSV-/Excel-Formel-Injection und sauberer Darstellung von +49-Telefonnummern)
         $exportFormat = (string)($_GET['export'] ?? '');
         if ($exportFormat === 'csv') {
+            $sanitizeCsvCell = static function (string $val): string {
+                if ($val !== '' && in_array($val[0], ['=', '+', '-', '@', "\t", "\r"], true)) {
+                    // Reine negative Dezimalzahlen (-12,50) unverändert lassen, alles andere (wie +49... oder =CMD) per Tabulator entschärfen
+                    if (!preg_match('/^-\d+([.,]\d+)?(\s*€)?$/u', $val)) {
+                        return "\t" . $val;
+                    }
+                }
+                return $val;
+            };
+
             header('Content-Type: text/csv; charset=UTF-8');
             header('Content-Disposition: attachment; filename="liste_' . $eventId . '_' . date('Ymd_His') . '.csv"');
             $out = fopen('php://output', 'w');
             fwrite($out, "\xEF\xBB\xBF");
             $headerRow = ['Nachname', 'Vorname'];
             foreach ($selectedCols as $cKey) {
-                $headerRow[] = $availableColumns[$cKey];
+                $headerRow[] = $sanitizeCsvCell((string)$availableColumns[$cKey]);
             }
             fputcsv($out, $headerRow, ';');
 
             foreach ($filteredRegs as $r) {
-                $row = [$r['last_name'], $r['first_name']];
+                $row = [$sanitizeCsvCell((string)$r['last_name']), $sanitizeCsvCell((string)$r['first_name'])];
                 foreach ($selectedCols as $cKey) {
-                    $row[] = $getCellValue($r, $cKey);
+                    $row[] = $sanitizeCsvCell($getCellValue($r, $cKey));
                 }
                 fputcsv($out, $row, ';');
             }

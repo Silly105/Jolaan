@@ -48,16 +48,23 @@ if ($action === 'login' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($res === '2fa') {
         AdminLayout::renderLogin('', true);
         exit;
+    } elseif ($res === 'locked') {
+        $loginError = 'Zu viele fehlgeschlagene Anmeldeversuche. Bitte warte 15 Minuten und versuche es dann erneut.';
+    } else {
+        $loginError = 'E-Mail-Adresse oder Passwort ist ungültig.';
     }
-    $loginError = 'E-Mail-Adresse oder Passwort ist ungültig.';
 }
 
 // Schritt 2: 2FA-Code oder Einmal-Notfallcode prüfen
 if ($action === 'verify_2fa' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     Auth::requireCsrf();
     $code = trim((string)($_POST['totp_code'] ?? ''));
-    if (Auth::verifyPending2fa($code)) {
+    $res2fa = Auth::verifyPending2faStatus($code);
+    if ($res2fa === 'ok') {
         header('Location: admin.php');
+        exit;
+    } elseif ($res2fa === 'locked') {
+        AdminLayout::renderLogin('Zu viele falsche 2FA-Codes eingegeben. Aus Sicherheitsgründen wurde der Vorgang für 15 Minuten gesperrt.', false);
         exit;
     }
     AdminLayout::renderLogin('Ungültiger 2FA- oder Notfallcode. Bitte versuche es erneut.', true);

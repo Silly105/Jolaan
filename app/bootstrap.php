@@ -1,8 +1,9 @@
 <?php
 declare(strict_types=1);
 
-// Sicherstellen, dass UTF-8 Standard ist
+// Sicherstellen, dass UTF-8 und mitteleuropäische Zeitzone Standard sind
 mb_internal_encoding('UTF-8');
+date_default_timezone_set('Europe/Berlin');
 
 // Sicherheits-Header
 if (!headers_sent()) {

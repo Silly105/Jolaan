@@ -5,6 +5,7 @@ namespace App\Modules\FormBuilder;
 
 use App\Core\Auth;
 use App\Core\Database;
+use App\Core\UploadValidator;
 use App\Modules\Admin\AdminLayout;
 use App\Modules\Events\EventRepository;
 
@@ -57,23 +58,37 @@ class FormBuilderController
                     $optsEn = array_values(array_filter(array_map('trim', explode("\n", (string)($_POST['options_en'] ?? ''))), fn($v) => $v !== ''));
                     $optionsJson = json_encode(['de' => $optsDe, 'en' => $optsEn], JSON_UNESCAPED_UNICODE);
                 } elseif ($fieldType === 'document') {
-                    $existingFile = trim((string)($_POST['existing_doc_path'] ?? ''));
+                    $oldDocFile   = trim((string)($_POST['existing_doc_path'] ?? ''));
+                    $existingFile = $oldDocFile;
                     if (!empty($_FILES['doc_file']['name'])) {
                         if (($_FILES['doc_file']['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
                             $_SESSION['flash_error'] = 'Dokument-Upload fehlgeschlagen (Fehlercode ' . (int)$_FILES['doc_file']['error'] . ').';
                             header('Location: admin.php?module=formbuilder&event_id=' . ($eventId ?? 0) . ($fieldId > 0 ? '&edit_id=' . $fieldId : ''));
                             exit;
                         }
+                        $docSize = (int)($_FILES['doc_file']['size'] ?? 0);
+                        if ($docSize <= 0 || $docSize > 15728640) {
+                            $_SESSION['flash_error'] = 'Das Dokument darf maximal 15 MB groß sein.';
+                            header('Location: admin.php?module=formbuilder&event_id=' . ($eventId ?? 0) . ($fieldId > 0 ? '&edit_id=' . $fieldId : ''));
+                            exit;
+                        }
                         $ext = strtolower(pathinfo((string)$_FILES['doc_file']['name'], PATHINFO_EXTENSION));
-                        if (!in_array($ext, ['pdf', 'txt', 'doc', 'docx', 'odt', 'png', 'jpg'], true)) {
-                            $_SESSION['flash_error'] = 'Ungültiges Dokumentformat. Erlaubt sind: PDF, TXT, DOC, DOCX, ODT, PNG, JPG.';
+                        if (!in_array($ext, ['pdf', 'txt', 'doc', 'docx', 'odt', 'png', 'jpg', 'zip'], true)) {
+                            $_SESSION['flash_error'] = 'Ungültiges Dokumentformat. Erlaubt sind: PDF, TXT, DOC, DOCX, ODT, PNG, JPG, ZIP.';
                             header('Location: admin.php?module=formbuilder&event_id=' . ($eventId ?? 0) . ($fieldId > 0 ? '&edit_id=' . $fieldId : ''));
                             exit;
                         }
                         $fileName = 'doc_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
                         $destDir  = dirname(__DIR__, 3) . '/storage/uploads';
+                        if (!is_dir($destDir)) {
+                            @mkdir($destDir, 0755, true);
+                        }
                         if (move_uploaded_file($_FILES['doc_file']['tmp_name'], $destDir . '/' . $fileName)) {
                             $existingFile = 'storage/uploads/' . $fileName;
+                        } else {
+                            $_SESSION['flash_error'] = 'Dokument konnte nicht gespeichert werden.';
+                            header('Location: admin.php?module=formbuilder&event_id=' . ($eventId ?? 0) . ($fieldId > 0 ? '&edit_id=' . $fieldId : ''));
+                            exit;
                         }
                     }
                     $optionsJson = json_encode([
@@ -136,6 +151,10 @@ class FormBuilderController
                     $_SESSION['flash_success'] = "Neues Feld „{$labelDe}“ wurde hinzugefügt.";
                 }
 
+                if (!empty($oldDocFile) && isset($existingFile) && $oldDocFile !== $existingFile) {
+                    UploadValidator::deleteStoredFileIfUnused($oldDocFile);
+                }
+
                 if ($isOrgaOnly === 1 && isset($_POST['is_required'])) {
                     $_SESSION['flash_success'] .= ' (Hinweis: Da das Feld „Nur für Orga sichtbar“ ist, wurde „Pflichtfeld“ automatisch deaktiviert.)';
                 }
@@ -150,18 +169,38 @@ class FormBuilderController
                     $keepPrefill = $isOrgaOnly === 1 ? 0 : (isset($qData['keep_on_prefill']) ? 1 : 0);
                     $sort        = (int)($qData['sort_order'] ?? 10);
 
-                    Database::query(
-                        "UPDATE {$tFields} SET sort_order = :sort, is_required = :req, is_encrypted = :enc, is_sensitive = :sens, is_orga_only = :orga, keep_on_prefill = :pref
-                         WHERE id = :id",
-                        ['sort' => $sort, 'req' => $isRequired, 'enc' => $isEnc, 'sens' => $isSens, 'orga' => $isOrgaOnly, 'pref' => $keepPrefill, 'id' => $fid]
-                    );
+                    if ($eventId === null) {
+                        Database::query(
+                            "UPDATE {$tFields} SET sort_order = :sort, is_required = :req, is_encrypted = :enc, is_sensitive = :sens, is_orga_only = :orga, keep_on_prefill = :pref
+                             WHERE id = :id AND event_id IS NULL",
+                            ['sort' => $sort, 'req' => $isRequired, 'enc' => $isEnc, 'sens' => $isSens, 'orga' => $isOrgaOnly, 'pref' => $keepPrefill, 'id' => $fid]
+                        );
+                    } else {
+                        Database::query(
+                            "UPDATE {$tFields} SET sort_order = :sort, is_required = :req, is_encrypted = :enc, is_sensitive = :sens, is_orga_only = :orga, keep_on_prefill = :pref
+                             WHERE id = :id AND event_id = :eid",
+                            ['sort' => $sort, 'req' => $isRequired, 'enc' => $isEnc, 'sens' => $isSens, 'orga' => $isOrgaOnly, 'pref' => $keepPrefill, 'id' => $fid, 'eid' => $eventId]
+                        );
+                    }
                 }
                 $_SESSION['flash_success'] = 'Reihenfolge und Feld-Optionen wurden gespeichert.';
             } elseif ($subAction === 'delete_field') {
                 $delId = (int)($_POST['delete_id'] ?? 0);
-                Database::query("DELETE FROM {$tFields} WHERE id = :id", ['id' => $delId]);
-                Database::query("DELETE FROM " . Database::table('registration_values') . " WHERE field_id = :id", ['id' => $delId]);
-                $_SESSION['flash_success'] = 'Feld wurde gelöscht.';
+                $oldField = $eventId === null
+                    ? Database::fetchOne("SELECT field_type, options_json FROM {$tFields} WHERE id = :id AND event_id IS NULL", ['id' => $delId])
+                    : Database::fetchOne("SELECT field_type, options_json FROM {$tFields} WHERE id = :id AND event_id = :eid", ['id' => $delId, 'eid' => $eventId]);
+
+                if ($oldField) {
+                    Database::query("DELETE FROM {$tFields} WHERE id = :id", ['id' => $delId]);
+                    Database::query("DELETE FROM " . Database::table('registration_values') . " WHERE field_id = :id", ['id' => $delId]);
+                    if ($oldField['field_type'] === 'document') {
+                        $opt = json_decode((string)($oldField['options_json'] ?? ''), true);
+                        if (!empty($opt['file_path'])) {
+                            UploadValidator::deleteStoredFileIfUnused((string)$opt['file_path']);
+                        }
+                    }
+                    $_SESSION['flash_success'] = 'Feld wurde gelöscht.';
+                }
             }
 
             header('Location: admin.php?module=formbuilder&event_id=' . ($eventId ?? 0));

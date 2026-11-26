@@ -113,6 +113,9 @@ class SettingsController
 
             $uploadErrors = [];
 
+            $oldSiteLogo    = (string)Database::getSetting('site_logo', '');
+            $oldSiteFavicon = (string)Database::getSetting('site_favicon', '');
+
             // Optionales globales Seitenlogo hochladen (mit Sanity-Check)
             if (!empty($_FILES['site_logo_file']['name'])) {
                 $check = UploadValidator::validateAndStoreImage(
@@ -125,11 +128,15 @@ class SettingsController
                 );
                 if ($check['ok']) {
                     Database::setSetting('site_logo', $check['path']);
+                    if ($oldSiteLogo !== '' && $oldSiteLogo !== $check['path']) {
+                        UploadValidator::deleteStoredFileIfUnused($oldSiteLogo);
+                    }
                 } else {
                     $uploadErrors[] = 'Header-Logo: ' . $check['error'];
                 }
             } elseif (isset($_POST['remove_site_logo'])) {
                 Database::setSetting('site_logo', '');
+                UploadValidator::deleteStoredFileIfUnused($oldSiteLogo);
             }
 
             // Optionales globales Favicon hochladen (mit Sanity-Check)
@@ -144,11 +151,15 @@ class SettingsController
                 );
                 if ($checkFav['ok']) {
                     Database::setSetting('site_favicon', $checkFav['path']);
+                    if ($oldSiteFavicon !== '' && $oldSiteFavicon !== $checkFav['path']) {
+                        UploadValidator::deleteStoredFileIfUnused($oldSiteFavicon);
+                    }
                 } else {
                     $uploadErrors[] = 'Favicon: ' . $checkFav['error'];
                 }
             } elseif (isset($_POST['remove_site_favicon'])) {
                 Database::setSetting('site_favicon', '');
+                UploadValidator::deleteStoredFileIfUnused($oldSiteFavicon);
             }
 
             if (!empty($uploadErrors)) {
@@ -464,7 +475,8 @@ class SettingsController
         ob_start();
         ?>
         <div class="alert" style="background:#eff6ff;border:1px solid #93c5fd;color:#1e3a8a;">
-            <strong>Verfügbare Platzhalter:</strong> <code>{vorname}</code>, <code>{nachname}</code>, <code>{conname}</code>, <code>{condatum}</code>, <code>{gruppe}</code>, <code>{betrag}</code>, <code>{link}</code>, <code>{wartelistenplatz}</code> (HTML ist erlaubt).
+            <strong>Verfügbare Platzhalter:</strong> <code>{vorname}</code>, <code>{nachname}</code>, <code>{conname}</code>, <code>{condatum}</code>, <code>{gruppe}</code>, <code>{betrag}</code>, <code>{link}</code>, <code>{wartelistenplatz}</code>.<br>
+            <span style="font-size:0.86rem;">Du kannst normalen Text mit Zeilenumbrüchen (Enter-Taste) schreiben – das System wandelt Zeilenumbrüche und Links automatisch passend um. Optional ist auch HTML (z. B. <code>&lt;b&gt;...&lt;/b&gt;</code>) erlaubt.</span>
         </div>
 
         <form method="post" action="admin.php?module=mailtemplates">

@@ -229,5 +229,17 @@ class Updater
                 Database::setSetting('default_header_mode', 'compact');
             }
         }
+
+        if ($version === '0.9.010') {
+            $tAttempts = Database::table('login_attempts');
+            $pdo->exec("CREATE TABLE IF NOT EXISTS {$tAttempts} (
+                `id` INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+                `ip_hash` VARCHAR(64) NOT NULL,
+                `identifier` VARCHAR(190) NOT NULL DEFAULT '',
+                `attempted_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                INDEX `idx_login_attempts_lookup` (`ip_hash`, `attempted_at`),
+                INDEX `idx_login_attempts_ident` (`identifier`, `attempted_at`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        }
     }
 }

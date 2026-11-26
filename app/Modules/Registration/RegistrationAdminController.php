@@ -46,8 +46,8 @@ class RegistrationAdminController
                 $_SESSION['flash_success'] = 'Zahlungsstände und Bestätigungen wurden gespeichert.';
                 header("Location: admin.php?module=registrations&event_id={$eventId}");
                 exit;
-            } elseif ($subAction === 'release_from_waitlist') {
-                // Teilnehmer von der Warteliste auf die reguläre Teilnehmerliste verschieben
+            } elseif ($subAction === 'release_from_waitlist' || $subAction === 'release_and_confirm_mail') {
+                // Teilnehmer von der Warteliste auf die reguläre Teilnehmerliste verschieben (optional direkt inkl. Anmeldebestätigungs-Mail)
                 $regId = (int)($_POST['reg_id'] ?? 0);
                 $reg   = RegistrationRepository::findWithValues($regId);
                 if ($reg && (int)$reg['event_id'] === $eventId) {
@@ -56,7 +56,18 @@ class RegistrationAdminController
                         'eid' => $eventId,
                     ]);
                     RegistrationRepository::appendHistoryLog($regId, 'Von der Warteliste freigegeben und auf die reguläre Teilnehmerliste übernommen', true);
-                    $_SESSION['flash_success'] = "{$reg['first_name']} {$reg['last_name']} wurde von der Warteliste auf die reguläre Teilnehmerliste übernommen.";
+
+                    if ($subAction === 'release_and_confirm_mail') {
+                        $reg['is_waitlist'] = 0;
+                        $sent = self::sendSystemMailToParticipant($event, $reg, 'confirm');
+                        if ($sent) {
+                            $_SESSION['flash_success'] = "{$reg['first_name']} {$reg['last_name']} wurde auf die reguläre Liste übernommen und die Anmeldebestätigungs-Mail wurde versendet.";
+                        } else {
+                            $_SESSION['flash_error'] = "{$reg['first_name']} {$reg['last_name']} wurde freigegeben, aber die E-Mail konnte nicht gesendet werden: " . Mailer::getLastError();
+                        }
+                    } else {
+                        $_SESSION['flash_success'] = "{$reg['first_name']} {$reg['last_name']} wurde von der Warteliste auf die reguläre Teilnehmerliste übernommen (ohne E-Mail-Versand).";
+                    }
                 }
                 $redirectBack = ($_POST['return_to'] ?? '') === 'edit'
                     ? "admin.php?module=registrations&event_id={$eventId}&action=edit&id={$regId}"
@@ -141,40 +152,18 @@ class RegistrationAdminController
                     'language'          => $lang,
                 ];
 
-                // Bidirektionale Synchronisation zwischen Stammsatz (core_*) und dynamischen System-Mapping-Feldern:
-                // Wurde oben der Stammsatz geändert, übernimmt das dynamische Feld den neuen Wert;
-                // wurde unten das dynamische Feld geändert (oder ist der Eintrag neu), übernimmt der Stammsatz den Wert.
+                // Stammsatz-Felder (Vorname, Nachname, E-Mail, Geburtsdatum) werden oben im Stammsatz gepflegt
+                // und automatisch in die zugeordneten dynamischen Felder übernommen, ohne sie unten doppelt abzufragen.
                 foreach ($fields as $f) {
                     $k = $f['field_key'];
-                    $v = trim((string)($submittedVals[$k] ?? ''));
                     if ($f['system_mapping'] === 'firstname') {
-                        $oldCore = (string)($oldReg['first_name'] ?? '');
-                        if ($oldReg && $coreData['first_name'] !== $oldCore && $coreData['first_name'] !== '') {
-                            $submittedVals[$k] = $coreData['first_name'];
-                        } elseif ($v !== '') {
-                            $coreData['first_name'] = $v;
-                        }
+                        $submittedVals[$k] = $coreData['first_name'];
                     } elseif ($f['system_mapping'] === 'lastname') {
-                        $oldCore = (string)($oldReg['last_name'] ?? '');
-                        if ($oldReg && $coreData['last_name'] !== $oldCore && $coreData['last_name'] !== '') {
-                            $submittedVals[$k] = $coreData['last_name'];
-                        } elseif ($v !== '') {
-                            $coreData['last_name'] = $v;
-                        }
+                        $submittedVals[$k] = $coreData['last_name'];
                     } elseif ($f['system_mapping'] === 'email') {
-                        $oldCore = (string)($oldReg['email'] ?? '');
-                        if ($oldReg && $coreData['email'] !== $oldCore && $coreData['email'] !== '') {
-                            $submittedVals[$k] = $coreData['email'];
-                        } elseif ($v !== '') {
-                            $coreData['email'] = $v;
-                        }
+                        $submittedVals[$k] = $coreData['email'];
                     } elseif ($f['system_mapping'] === 'birthdate') {
-                        $oldCore = (string)($oldReg['birth_date'] ?? '');
-                        if ($oldReg && (string)$coreData['birth_date'] !== $oldCore && $coreData['birth_date'] !== null) {
-                            $submittedVals[$k] = (string)$coreData['birth_date'];
-                        } elseif ($v !== '') {
-                            $coreData['birth_date'] = $v;
-                        }
+                        $submittedVals[$k] = (string)($coreData['birth_date'] ?? '');
                     }
                 }
 
@@ -217,8 +206,18 @@ class RegistrationAdminController
                     );
                     RegistrationRepository::saveFieldValues($regId, $fields, $submittedVals);
 
-                    // Statusänderungen im Verlaufs-Protokoll vermerken
+                    // Status- & Gruppenänderungen im Verlaufs-Protokoll vermerken
                     if ($oldReg) {
+                        if ((int)$oldReg['group_id'] !== $groupId) {
+                            $allGroupsForLog = EventRepository::getGroupsWithSeats($eventId);
+                            $groupNamesById = [];
+                            foreach ($allGroupsForLog as $gl) {
+                                $groupNamesById[(int)$gl['id']] = (string)$gl['name_de'];
+                            }
+                            $oldGName = $groupNamesById[(int)$oldReg['group_id']] ?? ('#' . (int)$oldReg['group_id']);
+                            $newGName = $groupNamesById[$groupId] ?? ('#' . $groupId);
+                            RegistrationRepository::appendHistoryLog($regId, "Teilnehmergruppe geändert von „{$oldGName}“ auf „{$newGName}“", true);
+                        }
                         if ((int)$oldReg['is_confirmed'] === 0 && $isConf === 1) {
                             RegistrationRepository::appendHistoryLog($regId, 'E-Mail-Bestätigung manuell auf „Bestätigt“ gesetzt' . ($isWait ? ' (Warteliste)' : ' (Reguläre Liste)'), true);
                         }
@@ -413,6 +412,11 @@ class RegistrationAdminController
                         </div>
                     </div>
                 </div>
+                <div style="margin-top:1rem;display:flex;align-items:center;gap:0.65rem;flex-wrap:wrap;">
+                    <input type="text" id="regQuickSearch" placeholder="Schnellsuche nach Vorname, Nachname oder E-Mail-Adresse..." oninput="filterRegistrationsLive()" style="max-width:440px;">
+                    <button type="button" id="regQuickSearchClear" onclick="document.getElementById('regQuickSearch').value='';filterRegistrationsLive();" class="btn btn-secondary btn-sm" style="display:none;">✕ Filter zurücksetzen</button>
+                    <span id="regQuickSearchInfo" style="font-size:0.84rem;color:#64748b;"></span>
+                </div>
             </div>
         </div>
 
@@ -435,6 +439,8 @@ class RegistrationAdminController
                             <?= e($g['name_de']) ?> (<?= count($groupRegs) ?>)
                             <?php if (!$inReg): ?>
                                 <span class="badge badge-gray" style="margin-left:0.5rem;">Interne Gruppe</span>
+                            <?php elseif (!empty($g['has_waiting_queue']) && ($g['raw_free'] ?? 0) > 0): ?>
+                                <span class="badge badge-orange" style="margin-left:0.5rem;"><?= (int)$g['raw_free'] ?> Platz/Plätze frei für Warteliste</span>
                             <?php elseif ($g['calculated_free'] !== null): ?>
                                 <span class="badge badge-green" style="margin-left:0.5rem;"><?= (int)$g['calculated_free'] ?> Plätze frei</span>
                             <?php endif; ?>
@@ -462,8 +468,9 @@ class RegistrationAdminController
                                     <?php foreach ($groupRegs as $r):
                                         $rid = (int)$r['id'];
                                         $fullPaid = (int)$r['is_fully_paid'] === 1;
+                                        $searchHaystack = mb_strtolower($r['last_name'] . ' ' . $r['first_name'] . ' ' . $r['first_name'] . ' ' . $r['last_name'] . ' ' . $r['email'], 'UTF-8');
                                     ?>
-                                        <tr>
+                                        <tr class="reg-search-row" data-search="<?= e($searchHaystack) ?>">
                                             <td>
                                                 <a href="admin.php?module=registrations&event_id=<?= $eventId ?>&action=edit&id=<?= $rid ?>" style="font-weight:600;color:var(--adm-accent);">
                                                     <?= e($r['last_name'] . ', ' . $r['first_name']) ?>
@@ -531,8 +538,9 @@ class RegistrationAdminController
                         <tbody>
                             <?php foreach ($unconfirmedDoi as $r):
                                 $rid = (int)$r['id'];
+                                $searchHaystack = mb_strtolower($r['last_name'] . ' ' . $r['first_name'] . ' ' . $r['first_name'] . ' ' . $r['last_name'] . ' ' . $r['email'], 'UTF-8');
                             ?>
-                                <tr>
+                                <tr class="reg-search-row" data-search="<?= e($searchHaystack) ?>">
                                     <td>
                                         <a href="admin.php?module=registrations&event_id=<?= $eventId ?>&action=edit&id=<?= $rid ?>" style="font-weight:600;">
                                             <?= e($r['last_name'] . ', ' . $r['first_name']) ?>
@@ -588,8 +596,9 @@ class RegistrationAdminController
                             <?php foreach ($waitlistRegs as $wr):
                                 $rid = (int)$wr['id'];
                                 $wConf = (int)($wr['waitlist_confirmed'] ?? 0) === 1;
+                                $searchHaystack = mb_strtolower($wr['last_name'] . ' ' . $wr['first_name'] . ' ' . $wr['first_name'] . ' ' . $wr['last_name'] . ' ' . $wr['email'], 'UTF-8');
                             ?>
-                                <tr>
+                                <tr class="reg-search-row" data-search="<?= e($searchHaystack) ?>">
                                     <td>
                                         <span class="badge badge-orange" style="font-size:0.86rem;">Platz #<?= (int)$wr['waitlist_rank'] ?></span>
                                     </td>
@@ -618,9 +627,15 @@ class RegistrationAdminController
                                         </form>
                                         <form method="post" action="admin.php?module=registrations&event_id=<?= $eventId ?>" style="margin:0;">
                                             <?= Auth::csrfField() ?>
+                                            <input type="hidden" name="sub_action" value="release_and_confirm_mail">
+                                            <input type="hidden" name="reg_id" value="<?= $rid ?>">
+                                            <button type="submit" class="btn btn-primary btn-sm">✅✉️ Freigeben & Bestätigungsmail senden</button>
+                                        </form>
+                                        <form method="post" action="admin.php?module=registrations&event_id=<?= $eventId ?>" style="margin:0;">
+                                            <?= Auth::csrfField() ?>
                                             <input type="hidden" name="sub_action" value="release_from_waitlist">
                                             <input type="hidden" name="reg_id" value="<?= $rid ?>">
-                                            <button type="submit" class="btn btn-primary btn-sm">✅ Anmeldung freigeben</button>
+                                            <button type="submit" class="btn btn-secondary btn-sm">✅ Nur freigeben</button>
                                         </form>
                                         <a href="admin.php?module=registrations&event_id=<?= $eventId ?>&action=edit&id=<?= $rid ?>" class="btn btn-secondary btn-sm">✏️ Details</a>
                                     </td>
@@ -631,6 +646,26 @@ class RegistrationAdminController
                 </div>
             </div>
         <?php endif; ?>
+
+        <script>
+        function filterRegistrationsLive() {
+            const input = document.getElementById('regQuickSearch');
+            const clearBtn = document.getElementById('regQuickSearchClear');
+            const info = document.getElementById('regQuickSearchInfo');
+            if (!input) return;
+            const q = input.value.trim().toLowerCase();
+            const rows = document.querySelectorAll('.reg-search-row');
+            let visible = 0;
+            rows.forEach(function (tr) {
+                const hay = tr.getAttribute('data-search') || '';
+                const match = (q === '' || hay.indexOf(q) !== -1);
+                tr.style.display = match ? '' : 'none';
+                if (match) visible++;
+            });
+            if (clearBtn) clearBtn.style.display = q !== '' ? 'inline-flex' : 'none';
+            if (info) info.textContent = q !== '' ? (visible + ' Treffer angezeigt') : '';
+        }
+        </script>
         <?php
         AdminLayout::render('Anmeldeverwaltung – ' . $event['title'], 'registrations', (string)ob_get_clean(), $eventId);
     }
@@ -684,10 +719,17 @@ class RegistrationAdminController
                         </form>
                         <form method="post" action="admin.php?module=registrations&event_id=<?= $eventId ?>" style="margin:0;">
                             <?= Auth::csrfField() ?>
+                            <input type="hidden" name="sub_action" value="release_and_confirm_mail">
+                            <input type="hidden" name="return_to" value="edit">
+                            <input type="hidden" name="reg_id" value="<?= (int)$r['id'] ?>">
+                            <button type="submit" class="btn btn-primary btn-sm">✅✉️ Freigeben & Bestätigungsmail senden</button>
+                        </form>
+                        <form method="post" action="admin.php?module=registrations&event_id=<?= $eventId ?>" style="margin:0;">
+                            <?= Auth::csrfField() ?>
                             <input type="hidden" name="sub_action" value="release_from_waitlist">
                             <input type="hidden" name="return_to" value="edit">
                             <input type="hidden" name="reg_id" value="<?= (int)$r['id'] ?>">
-                            <button type="submit" class="btn btn-primary btn-sm">✅ Anmeldung freigeben (auf reguläre Liste übernehmen)</button>
+                            <button type="submit" class="btn btn-secondary btn-sm">✅ Nur freigeben (ohne Mail)</button>
                         </form>
                     <?php endif; ?>
 
@@ -812,23 +854,47 @@ class RegistrationAdminController
 
             <div class="card">
                 <div class="card-header">
-                    <h2>Formularfelder & Interne Orga-Felder</h2>
+                    <h2>Weitere Formularfelder & Interne Orga-Felder</h2>
                 </div>
                 <div class="card-body">
-                    <?php foreach ($fields as $f):
+                    <?php
+                    // Bereits im oberen Stammsatz angezeigte System-Felder hier nicht noch ein zweites Mal wiederholen
+                    $coreMappings = ['firstname', 'lastname', 'email', 'birthdate'];
+                    $fieldCount = count($fields);
+                    for ($idx = 0; $idx < $fieldCount; $idx++):
+                        $f = $fields[$idx];
                         $type = $f['field_type'];
+                        if (in_array($f['system_mapping'] ?? 'none', $coreMappings, true)) {
+                            continue;
+                        }
+
+                        if ($type === 'heading'):
+                            // Überschrift nur ausgeben, wenn vor der nächsten Überschrift mindestens ein sichtbares Nicht-Stammsatz-Feld folgt
+                            $hasVisibleChild = false;
+                            for ($j = $idx + 1; $j < $fieldCount; $j++) {
+                                if ($fields[$j]['field_type'] === 'heading') {
+                                    break;
+                                }
+                                if (!in_array($fields[$j]['system_mapping'] ?? 'none', $coreMappings, true)) {
+                                    $hasVisibleChild = true;
+                                    break;
+                                }
+                            }
+                            if (!$hasVisibleChild) {
+                                continue;
+                            }
+                    ?>
+                        <h3 style="margin:1.5rem 0 0.75rem;padding-bottom:0.35rem;border-bottom:2px solid #cbd5e1;color:var(--adm-accent);">
+                            <?= e($f['label_de']) ?>
+                        </h3>
+                        <?php continue; endif;
+
                         $key  = $f['field_key'];
                         $val  = (string)($r['values'][$key] ?? '');
                         $isOrgaOnly = (int)$f['is_orga_only'] === 1;
                         $isSens     = (int)$f['is_sensitive'] === 1;
                         $isEnc      = $isSens || ((int)($f['is_encrypted'] ?? 0) === 1);
-
-                        if ($type === 'heading'):
                     ?>
-                        <h3 style="margin:1.5rem 0 0.75rem;padding-bottom:0.35rem;border-bottom:2px solid #cbd5e1;color:var(--adm-accent);">
-                            <?= e($f['label_de']) ?>
-                        </h3>
-                        <?php continue; endif; ?>
 
                         <div class="form-group" style="<?= $isOrgaOnly ? 'background:#eff6ff;padding:0.75rem 1rem;border-radius:6px;border:1px solid #bfdbfe;' : '' ?>">
                             <label for="f_<?= e($key) ?>">
@@ -863,7 +929,7 @@ class RegistrationAdminController
                                 <input type="<?= e(in_array($type, ['date', 'number', 'email'], true) ? $type : 'text') ?>" id="f_<?= e($key) ?>" name="f[<?= e($key) ?>]" value="<?= e($val) ?>">
                             <?php endif; ?>
                         </div>
-                    <?php endforeach; ?>
+                    <?php endfor; ?>
 
                     <div style="margin-top:1.5rem;">
                         <button type="submit" class="btn btn-primary" style="font-size:1rem;padding:0.65rem 1.5rem;">💾 Teilnehmerdaten speichern</button>

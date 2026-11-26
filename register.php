@@ -41,6 +41,12 @@ $orgaContactEmail = trim((string)$event['admin_email']) ?: (string)Database::get
 
 // 1. E-Mail-Bestätigungslink verarbeiten (Zeitpunkt der Bestätigung entscheidet über Warteliste!)
 if ($action === 'confirm') {
+    // Vorab-Prüfungen durch automatische Mail-Scanner (HEAD-Requests) dürfen den Link nicht auslösen
+    if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? 'GET')) === 'HEAD') {
+        http_response_code(200);
+        exit;
+    }
+
     $regId = (int)($_GET['id'] ?? 0);
     $token = trim((string)($_GET['token'] ?? ''));
     $tRegs = Database::table('registrations');

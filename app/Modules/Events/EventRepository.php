@@ -54,22 +54,30 @@ class EventRepository
         foreach ($groups as &$g) {
             $maxSeats  = (int)$g['max_seats'];
             $confirmed = (int)$g['confirmed_count'];
+            $waitlist  = (int)($g['waitlist_count'] ?? 0);
             $override  = $g['manual_free_override'];
 
             if ($override !== null && $override !== '') {
-                $free = max(0, (int)$override);
+                $rawFree = max(0, (int)$override);
                 $isOverridden = true;
             } elseif ($maxSeats > 0) {
-                $free = max(0, $maxSeats - $confirmed);
+                $rawFree = max(0, $maxSeats - $confirmed);
                 $isOverridden = false;
             } else {
-                $free = null;
+                $rawFree = null;
                 $isOverridden = false;
             }
 
-            $g['calculated_free'] = $free;
-            $g['is_overridden']   = $isOverridden;
-            $g['is_full']         = ((int)$g['is_locked'] === 1) || ($free !== null && $free <= 0);
+            // Wartelisten-Vorrang: Solange bestätigte Personen auf der Warteliste stehen (und kein manueller Override aktiv ist),
+            // gilt die Gruppe nach außen weiterhin als voll, damit sich Neuanmeldungen nicht vor Wartelisten-Plätze schieben.
+            $hasWaitingQueue = ($waitlist > 0 && !$isOverridden);
+            $publicFree = ($hasWaitingQueue && $rawFree !== null) ? 0 : $rawFree;
+
+            $g['raw_free']          = $rawFree;
+            $g['has_waiting_queue'] = $hasWaitingQueue;
+            $g['calculated_free']   = $publicFree;
+            $g['is_overridden']     = $isOverridden;
+            $g['is_full']           = ((int)$g['is_locked'] === 1) || $hasWaitingQueue || ($rawFree !== null && $rawFree <= 0);
         }
         unset($g);
 

@@ -5,7 +5,7 @@ namespace App\Core;
 
 class Version
 {
-    public const CURRENT = '0.9.009';
+    public const CURRENT = '0.9.010';
 
     /**
      * Fortlaufende Änderungshistorie & Migrations-Schritte.
@@ -125,6 +125,21 @@ class Version
                 'changes' => [
                     'Neue ruhige 16:9-Breitbild-Hintergrundgrafiken ohne kleinteiliges Kachelmuster für „Orbital Terminal“, „Eisen & Banner“ und „Arkham Grimoire“ erstellt',
                     'Hintergrunddarstellung dieser drei Themes auf vollflächiges, nicht wiederholendes Cover-Layout (background-size: cover, fixed) umgestellt, um Kachelwiederholungen und Kantenbrüche vollständig zu beseitigen',
+                ],
+            ],
+            '0.9.010' => [
+                'date'    => '2026-11-26',
+                'title'   => 'Sicherheits-Härtung (Brute-Force-Schutz, Live-Rechtecheck), Wartelisten-Vorrang, Schnellsuche, Neues Handbuch & Einsteiger-Installer',
+                'changes' => [
+                    'Brute-Force-Schutz: Automatische 15-Minuten-Sperre nach 5 fehlgeschlagenen Login- oder 2FA-Versuchen (datenschutzkonform mit gehashtem IP-Index)',
+                    'Echtzeit-Rechteprüfung im Backend: Deaktivierte Benutzerkonten oder geänderte Rollen greifen sofort ohne erneutes Einloggen',
+                    'Wartelisten-Vorrang bei Absagen: Solange Personen auf der Warteliste stehen, bleibt die Gruppe nach außen ausgebucht, damit sich Neuanmeldungen nicht vor Wartelisten-Plätze schieben',
+                    'Anmeldeverwaltung erweitert: Live-Schnellsuche nach Name/E-Mail, zwei getrennte Wartelisten-Buttons („Nur freigeben“ & „Freigeben & Bestätigungsmail senden“), Protokollierung von Gruppenwechseln sowie Bereinigung doppelter Stammsatz-Felder beim Bearbeiten',
+                    'E-Mail-Vorlagen wandeln normale Zeilenumbrüche ohne HTML automatisch um; CSV-Export schützt vor Excel-Formel-Injection und erhält +49-Telefonnummern',
+                    'SVG-Upload-Prüfung, Upload-Aufräumfunktion, HEAD-Scanner-Schutz beim Bestätigungslink, Zeitzone Europe/Berlin und RFC-5321-Härtung im Mailer ergänzt',
+                    'Hilfe & Handbuch komplett für den stressfreien Con-Alltag neu aufgebaut (aufklappbare Schritt-für-Schritt-Anleitungen + Trennung SL / Admin)',
+                    'Installer legt fehlende Schutzdateien (.htaccess) und Ordner automatisch an, schreibt config.php erst nach komplettem Abschluss und README.md wurde als laienfreundliche Komplettanleitung aktualisiert',
+                    'Sprachauswahl-Buttons (DE/EN) beim zentrierten Banner-Header und Hero-Header auch auf dem Desktop sauber zentriert unterhalb der Header-Grafik platziert',
                 ],
             ],
         ];

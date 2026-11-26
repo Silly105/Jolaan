@@ -158,12 +158,26 @@ class EventAdminController
                 $tFields = Database::table('form_fields');
                 $tViews  = Database::table('saved_views');
 
+                $evToDelete = EventRepository::find($id);
+                $docFields  = Database::fetchAll("SELECT options_json FROM {$tFields} WHERE event_id = :eid AND field_type = 'document'", ['eid' => $id]);
+
                 Database::query("DELETE rv FROM {$tVals} rv INNER JOIN {$tRegs} r ON r.id = rv.registration_id WHERE r.event_id = :eid", ['eid' => $id]);
                 Database::query("DELETE FROM {$tRegs} WHERE event_id = :eid", ['eid' => $id]);
                 Database::query("DELETE FROM {$tGroups} WHERE event_id = :eid", ['eid' => $id]);
                 Database::query("DELETE FROM {$tFields} WHERE event_id = :eid", ['eid' => $id]);
                 Database::query("DELETE FROM {$tViews} WHERE event_id = :eid", ['eid' => $id]);
                 Database::query("DELETE FROM {$tEvents} WHERE id = :eid", ['eid' => $id]);
+
+                if ($evToDelete) {
+                    UploadValidator::deleteStoredFileIfUnused($evToDelete['header_logo_path'] ?? '');
+                    UploadValidator::deleteStoredFileIfUnused($evToDelete['banner_image_path'] ?? '');
+                }
+                foreach ($docFields as $df) {
+                    $opt = json_decode((string)($df['options_json'] ?? ''), true);
+                    if (!empty($opt['file_path'])) {
+                        UploadValidator::deleteStoredFileIfUnused((string)$opt['file_path']);
+                    }
+                }
 
                 if ((int)($_SESSION['active_event_id'] ?? 0) === $id) {
                     unset($_SESSION['active_event_id']);
@@ -209,7 +223,8 @@ class EventAdminController
             $adminEmail      = trim((string)($_POST['admin_email'] ?? ''));
 
             // Optionaler Upload eines Veranstaltungslogos für den Header (mit Sanity-Check)
-            $headerLogoPath = $event['header_logo_path'] ?? '';
+            $oldHeaderLogo  = (string)($event['header_logo_path'] ?? '');
+            $headerLogoPath = $oldHeaderLogo;
             if (!empty($_FILES['header_logo']['name'])) {
                 $check = UploadValidator::validateAndStoreImage(
                     $_FILES['header_logo'],
@@ -231,7 +246,8 @@ class EventAdminController
             }
 
             // Optionaler Upload eines individuellen Banner-/Stimmungsbildes über der Anmeldung (volle Formularbreite)
-            $bannerImagePath = $event['banner_image_path'] ?? '';
+            $oldBannerImage  = (string)($event['banner_image_path'] ?? '');
+            $bannerImagePath = $oldBannerImage;
             if (!empty($_FILES['banner_image']['name'])) {
                 $checkBanner = UploadValidator::validateAndStoreImage(
                     $_FILES['banner_image'],
@@ -308,6 +324,12 @@ class EventAdminController
                      WHERE id = :id",
                     $params
                 );
+                if ($oldHeaderLogo !== '' && $oldHeaderLogo !== $headerLogoPath) {
+                    UploadValidator::deleteStoredFileIfUnused($oldHeaderLogo);
+                }
+                if ($oldBannerImage !== '' && $oldBannerImage !== $bannerImagePath) {
+                    UploadValidator::deleteStoredFileIfUnused($oldBannerImage);
+                }
                 $_SESSION['flash_success'] = 'Veranstaltungseinstellungen wurden gespeichert.';
                 header("Location: admin.php?module=events&action=edit&id={$id}");
                 exit;
@@ -753,6 +775,8 @@ class EventAdminController
                                         <td>
                                             <?php if (!$inReg): ?>
                                                 <span class="badge badge-gray">Intern (nicht im Formular)</span>
+                                            <?php elseif (!empty($g['has_waiting_queue']) && ($g['raw_free'] ?? 0) > 0): ?>
+                                                <span class="badge badge-orange" title="Nach außen hin weiterhin als ausgebucht angezeigt, bis die Warteliste abgearbeitet ist"><?= (int)$g['raw_free'] ?> frei für WL (Außen: Voll)</span>
                                             <?php elseif ($g['is_full']): ?>
                                                 <span class="badge badge-red">Ausgebucht</span>
                                             <?php elseif ($g['calculated_free'] !== null): ?>
