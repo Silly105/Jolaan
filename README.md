@@ -14,7 +14,7 @@ Entwickelt für den direkten Einsatz auf jedem klassischen Shared-Webhosting (**
 - **Wartelisten-System mit Nachrück-Schutz:** Pro Veranstaltung aktivierbar. Der exakte Zeitpunkt der **E-Mail-Bestätigung** entscheidet fair über einen regulären Platz oder den Rang auf der Warteliste. Solange Personen auf der Warteliste stehen, bleibt die Gruppe nach außen für Neuanmeldungen gesperrt, bis die Orga Plätze freigibt (*„Nur freigeben“* oder *„Freigeben & Bestätigungsmail senden“*).
 - **Geheim-Link für Nachzügler:** Erlaubt ausgewählten Personen die Anmeldung auch bei geschlossener Veranstaltung oder vollen Gruppen und überspringt automatisch die Warteliste.
 - **Haushalts- & Familien-Anmeldungen („Übernahme“):** Mehrere verschiedene Personen können mit derselben E-Mail-Adresse angemeldet werden. Nach erfolgreicher Anmeldung bietet ein Button an, eine weitere Person anzumelden und alle als *„Übernahme“* markierten Kontaktdaten (z. B. Nachname, Adresse, E-Mail, Telefon) automatisch vorauszufüllen.
-- **Startseiten-Übersicht:** Automatische Trennung nach laufenden und kommenden Veranstaltungen, optionaler Live-Countdown, Flyer-/Foren-Links und anklickbarer Karten-/Google-Maps-Link zum Veranstaltungsort.
+- **Startseiten-Übersicht & Flyer-Upload:** Automatische Trennung nach laufenden und kommenden Veranstaltungen, optionaler Live-Countdown, Flyer-Anbindung (wahlweise per externer URL **oder** direktem PDF-/Bild-Upload), Foren-Links und anklickbarer Karten-/Google-Maps-Link zum Veranstaltungsort.
 
 ### Formular-Baukasten & Zweisprachigkeit (DE / EN)
 - **Frei gestaltbare Abfragefelder:** Einzeiliger Text, mehrzeiliger Text, E-Mail, Zahl, Datum, Auswahl-Dropdown, Checkbox, Abschnitts-Überschriften sowie **Dokumenten-Upload + Pflicht-Checkbox** (z. B. für AGB, Hausordnung oder Einverständniserklärungen).
@@ -24,6 +24,9 @@ Entwickelt für den direkten Einsatz auf jedem klassischen Shared-Webhosting (**
 ### Anmeldeverwaltung, Listen & E-Mail-System
 - **Übersichtliche Anmeldeverwaltung:** Schnellerfassung von Zahlungsbeträgen, Live-Schnellsuche nach Name/E-Mail, 1-Klick-Versand zweisprachiger Systemmails (E-Mail-Bestätigung, Wartelistenplatz-Bestätigung mit aktuellem `{wartelistenplatz}`, Anmeldebestätigung, Zahlungserinnerung, Geldeingangsbestätigung) und automatisches, schreibgeschütztes **Verlaufs- & Zeitprotokoll** pro Teilnehmer.
 - **Dynamischer Listen-Generator:** Vorgefertigte und frei speicherbare Listen (inkl. automatischer **U18-Minderjährigen-Berechnung zum Con-Beginndatum**, Wartelisten-Filter, Küchen-, Sanitäter-, Zahlungs- und SL-Listen) mit sauberer Druck-/PDF-Ansicht und Excel-kompatiblem CSV-Export.
+- **Rundmail-Modul für Orga & SL (Spam- & Datenschutz-sicher):** Eigene Veranstaltungsseite *Rundmail* (z. B. für Anreise-Infos an alle bestätigten Teilnehmer, einzelne Gruppen, offene Zahlungen oder die Warteliste – inkl. Haushalts-Deduplizierung):
+  - *Empfohlener System-Versand:* Versendet personalisierte Einzel-Mails (`{vorname}`, `{condatum}`, `{gruppe}` …) schonend gedrosselt in 5er-Paketen mit Live-Fortschrittsbalken, Vorab-Vorschaumail an die eigene Adresse und automatischem Vermerk im Teilnehmer-Protokoll.
+  - *Fallback fürs eigene E-Mail-Programm:* Automatische Aufteilung in 50er-Bündel mit direkten `mailto:?bcc=...`-Buttons (setzt alle Adressen sofort ins unsichtbare `BCC`-Feld) sowie 1-Klick-Kopierfeldern (Komma- und Semikolon-getrennt).
 - **100 % nativer E-Mail- & SMTP-Versand:** Funktioniert sofort über den lokalen Webserver (`PHP mail()`) oder optional über einen eigenen externen SMTP-Server (`STARTTLS` / `SSL/TLS`) – inkl. **Test-E-Mail-Funktion** im Backend.
 
 ### Designs (14 Themes) & Header-Optionen

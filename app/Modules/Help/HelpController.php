@@ -87,7 +87,7 @@ class HelpController
         <!-- TEIL 1: TÄGLICHE ARBEIT FÜR SL & ORGA -->
         <div class="card">
             <div class="card-header">
-                <h2>Tägliche Aufgaben (Anmeldungen, Zahlungen, Warteliste & Listen)</h2>
+                <h2>Tägliche Aufgaben (Anmeldungen, Zahlungen, Warteliste, Listen & Rundmails)</h2>
             </div>
             <div class="card-body">
 
@@ -192,6 +192,17 @@ class HelpController
                 </details>
 
                 <details class="help-acc">
+                    <summary>Wie schicke ich eine Rundmail (z. B. Anreise-Infos) an alle Teilnehmer, ohne im Spam zu landen?</summary>
+                    <div class="help-acc-body">
+                        <p style="margin-top:0;">Klicke links unter der gewählten Veranstaltung auf <strong>Rundmail</strong> (für Admins und SL freigeschaltet). Wähle oben den Empfängerkreis (z. B. <em>Alle bestätigten regulären Teilnehmer</em> – Absagen und Warteliste werden dort automatisch ausgeschlossen). Danach hast du zwei sichere Wege:</p>
+                        <ul>
+                            <li><strong>Weg 1 – Direkt über das System versenden (Empfohlen):</strong> Trage Betreff und Text ein (auf Wunsch mit Platzhaltern wie <code>{vorname}</code> oder <code>{condatum}</code>). Teste die Mail kurz über <strong>✉️ Vorschau an mich senden</strong> und starte danach den Versand. Das System verschickt automatisch einzelne Mails in schonenden <strong>5er-Paketen mit kurzer Pause</strong> – so sieht niemand fremde E-Mail-Adressen, Spamfilter bleiben entspannt, und jede Mail wird im Protokoll des Teilnehmers vermerkt.</li>
+                            <li><strong>Weg 2 – Im eigenen Mailprogramm öffnen (50er-BCC-Pakete als Fallback):</strong> Wenn du mehrere große PDF-Anhänge mitschicken möchtest, findest du unten auf der Seite fertige <strong>50er-Bündel</strong>. Ein Klick auf <strong>✉️ Paket im E-Mail-Programm öffnen</strong> öffnet Outlook, Thunderbird oder Apple Mail und setzt die 50 Adressen direkt ins unsichtbare <strong>BCC-Feld (Blindkopie)</strong>. Darunter gibt es auch 1-Klick-Kopierfelder (Komma &amp; Semikolon) für Webmail im Browser.</li>
+                        </ul>
+                    </div>
+                </details>
+
+                <details class="help-acc">
                     <summary>Wie ändere ich mein Passwort und schütze meinen Zugang mit 2FA?</summary>
                     <div class="help-acc-body">
                         <ol>
@@ -246,11 +257,12 @@ class HelpController
                 </details>
 
                 <details class="help-acc">
-                    <summary>Designs (Themes), Header-Modus & individuelles Veranstaltungs-Bild</summary>
+                    <summary>Designs (Themes), Header-Modus, Veranstaltungs-Bild & Flyer-Upload</summary>
                     <div class="help-acc-body">
                         <ul>
                             <li><strong>Globales Design vs. Con-Design:</strong> Unter <strong>Seiteneinstellungen</strong> wählst du das Standard-Theme für Startseite und Backend. Unter <strong>Con-Einstellungen</strong> kannst du jeder Veranstaltung ein eigenes Theme geben (z. B. <em>Keltensiegel, Feuervogel, Eisen & Banner, Reisechronik, Art Déco, Western, Orbital Terminal</em> oder <em>Arkham Grimoire</em>).</li>
-                            <li><strong>Header-Modus & Bilder:</strong> Du kannst zwischen <em>Kompakter Kopfleiste</em>, <em>Zentriertem Wappen-/Banner-Header</em> und <em>Großem Hero-Header</em> wählen. Zusätzlich kannst du in den <em>Con-Einstellungen</em> ein <strong>eigenes Stimmungsbild in voller Formularbreite</strong> hochladen, das auf der Anmeldeseite direkt über dem Einführungstext erscheint.</li>
+                            <li><strong>Header-Modus & Stimmungsbild:</strong> Du kannst zwischen <em>Kompakter Kopfleiste</em>, <em>Zentriertem Wappen-/Banner-Header</em> und <em>Großem Hero-Header</em> wählen. Zusätzlich kannst du in den <em>Con-Einstellungen</em> ein <strong>eigenes Stimmungsbild in voller Formularbreite</strong> hochladen, das auf der Anmeldeseite direkt über dem Einführungstext erscheint.</li>
+                            <li><strong>Flyer als Link oder Datei-Upload:</strong> In den <em>Con-Einstellungen</em> kannst du für den Veranstaltungs-Flyer entweder eine externe Web-Adresse eintragen <strong>oder</strong> direkt eine eigene PDF- oder Bilddatei (<code>.pdf, .jpg, .png, .webp</code>) hochladen, die dann auf der Startseite verlinkt wird.</li>
                         </ul>
                     </div>
                 </details>

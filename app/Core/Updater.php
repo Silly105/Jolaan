@@ -241,5 +241,12 @@ class Updater
                 INDEX `idx_login_attempts_ident` (`identifier`, `attempted_at`)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
         }
+
+        if ($version === '0.9.011') {
+            $tEvents = Database::table('events');
+            if (!self::columnExists($tEvents, 'flyer_file_path')) {
+                $pdo->exec("ALTER TABLE {$tEvents} ADD COLUMN `flyer_file_path` VARCHAR(255) NOT NULL DEFAULT '' AFTER `flyer_url`");
+            }
+        }
     }
 }

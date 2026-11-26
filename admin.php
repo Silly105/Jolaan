@@ -7,6 +7,7 @@ use App\Core\Auth;
 use App\Core\Config;
 use App\Core\Updater;
 use App\Modules\Admin\AdminLayout;
+use App\Modules\Broadcast\BroadcastController;
 use App\Modules\Events\EventAdminController;
 use App\Modules\FormBuilder\FormBuilderController;
 use App\Modules\Gdpr\GdprController;
@@ -97,6 +98,9 @@ switch ($module) {
         break;
     case 'lists':
         ListGeneratorController::handle();
+        break;
+    case 'broadcast':
+        BroadcastController::handle();
         break;
     case 'gdpr':
         GdprController::handle();

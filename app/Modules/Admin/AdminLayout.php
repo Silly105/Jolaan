@@ -464,6 +464,7 @@ class AdminLayout
                     <ul class="side-nav">
                         <li><a href="admin.php?module=registrations&event_id=<?= $aeId ?>" class="<?= $activeModule === 'registrations' ? 'active' : '' ?>">Anmeldeverwaltung</a></li>
                         <li><a href="admin.php?module=lists&event_id=<?= $aeId ?>" class="<?= $activeModule === 'lists' ? 'active' : '' ?>">Listen</a></li>
+                        <li><a href="admin.php?module=broadcast&event_id=<?= $aeId ?>" class="<?= $activeModule === 'broadcast' ? 'active' : '' ?>">Rundmail</a></li>
                         <?php if ($isAdmin): ?>
                             <li><a href="admin.php?module=events&action=edit&id=<?= $aeId ?>" class="<?= ($activeModule === 'events' && !$isNewEventPage) ? 'active' : '' ?>">Con-Einstellungen</a></li>
                         <?php endif; ?>

@@ -56,9 +56,9 @@ class EventAdminController
                         <thead>
                             <tr>
                                 <th>Veranstaltung</th>
-                                <th>Datum</th>
-                                <th>Status & Startseite</th>
-                                <th>Anmeldungen (Bestätigt / Offen)</th>
+                                <th style="width:110px;">Datum</th>
+                                <th>Status</th>
+                                <th>Anmeldungen</th>
                                 <th>Verfügbare Plätze</th>
                                 <th>Aktionen</th>
                             </tr>
@@ -66,6 +66,8 @@ class EventAdminController
                         <tbody>
                             <?php foreach ($events as $ev):
                                 $eid = (int)$ev['id'];
+                                $sFormatted = format_date($ev['start_date']);
+                                $eFormatted = format_date($ev['end_date']);
                             ?>
                                 <tr>
                                     <td>
@@ -74,28 +76,35 @@ class EventAdminController
                                             <div style="font-size:0.82rem;color:#64748b;"><?= e($ev['subtitle']) ?></div>
                                         <?php endif; ?>
                                     </td>
-                                    <td style="white-space:nowrap;">
-                                        <?= e(format_date($ev['start_date'])) ?> – <?= e(format_date($ev['end_date'])) ?>
+                                    <td style="width:110px;min-width:102px;max-width:115px;line-height:1.35;">
+                                        <?php if ($sFormatted === $eFormatted): ?>
+                                            <?= e($sFormatted) ?>
+                                        <?php else: ?>
+                                            <span style="white-space:nowrap;"><?= e($sFormatted) ?> –</span><br>
+                                            <span style="white-space:nowrap;"><?= e($eFormatted) ?></span>
+                                        <?php endif; ?>
                                     </td>
                                     <td>
-                                        <?php if ($ev['status'] === 'open'): ?>
-                                            <span class="badge badge-green">Anmeldung offen</span>
-                                        <?php else: ?>
-                                            <span class="badge badge-red">Gesperrt</span>
-                                        <?php endif; ?>
-                                        <?php if ((int)$ev['show_on_index'] === 1): ?>
-                                            <span class="badge badge-blue">Auf Startseite</span>
-                                        <?php endif; ?>
-                                        <?php if ($ev['waitlist_regs'] > 0): ?>
-                                            <span class="badge badge-orange">Warteliste (<?= $ev['waitlist_regs'] ?>)</span>
-                                        <?php endif; ?>
+                                        <div style="display:flex;flex-wrap:wrap;gap:0.25rem;">
+                                            <?php if ($ev['status'] === 'open'): ?>
+                                                <span class="badge badge-green">Anmeldung offen</span>
+                                            <?php else: ?>
+                                                <span class="badge badge-red">Gesperrt</span>
+                                            <?php endif; ?>
+                                            <?php if ((int)$ev['show_on_index'] === 1): ?>
+                                                <span class="badge badge-blue">Auf Startseite</span>
+                                            <?php endif; ?>
+                                            <?php if ($ev['waitlist_regs'] > 0): ?>
+                                                <span class="badge badge-orange">Warteliste (<?= $ev['waitlist_regs'] ?>)</span>
+                                            <?php endif; ?>
+                                        </div>
                                     </td>
                                     <td>
                                         <strong><?= $ev['confirmed_regs'] ?></strong> bestätigt
                                         <?php if ($ev['waitlist_regs'] > 0): ?>
-                                            <span style="color:#c2410c;font-weight:600;">(+ <?= $ev['waitlist_regs'] ?> Warteliste)</span>
+                                            <span style="color:#c2410c;font-weight:600;">(+ <?= $ev['waitlist_regs'] ?> WL)</span>
                                         <?php endif; ?>
-                                        <span style="color:#64748b;">(gesamt: <?= $ev['total_regs'] ?>)</span>
+                                        <span style="color:#64748b;">(ges. <?= $ev['total_regs'] ?>)</span>
                                         <?php if ($ev['unpaid_regs'] > 0): ?>
                                             <div style="font-size:0.8rem;color:#b45309;"><?= $ev['unpaid_regs'] ?> Zahlung(en) offen</div>
                                         <?php endif; ?>
@@ -117,13 +126,16 @@ class EventAdminController
                                             </div>
                                         <?php endforeach; ?>
                                     </td>
-                                    <td style="white-space:nowrap;">
-                                        <a href="admin.php?module=registrations&event_id=<?= $eid ?>" class="btn btn-primary btn-sm">Anmeldeverwaltung</a>
-                                        <a href="admin.php?module=lists&event_id=<?= $eid ?>" class="btn btn-secondary btn-sm">Listen</a>
-                                        <a href="admin.php?module=groups&event_id=<?= $eid ?>" class="btn btn-secondary btn-sm">Verfügbare Plätze</a>
-                                        <?php if (Auth::isAdmin()): ?>
-                                            <a href="admin.php?module=events&action=edit&id=<?= $eid ?>" class="btn btn-secondary btn-sm">Con-Einstellungen</a>
-                                        <?php endif; ?>
+                                    <td>
+                                        <div style="display:flex;flex-wrap:wrap;gap:0.35rem;">
+                                            <a href="admin.php?module=registrations&event_id=<?= $eid ?>" class="btn btn-primary btn-sm">Anmeldeverwaltung</a>
+                                            <a href="admin.php?module=lists&event_id=<?= $eid ?>" class="btn btn-secondary btn-sm">Listen</a>
+                                            <a href="admin.php?module=broadcast&event_id=<?= $eid ?>" class="btn btn-secondary btn-sm">Rundmail</a>
+                                            <a href="admin.php?module=groups&event_id=<?= $eid ?>" class="btn btn-secondary btn-sm">Verfügbare Plätze</a>
+                                            <?php if (Auth::isAdmin()): ?>
+                                                <a href="admin.php?module=events&action=edit&id=<?= $eid ?>" class="btn btn-secondary btn-sm">Con-Einstellungen</a>
+                                            <?php endif; ?>
+                                        </div>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -171,6 +183,7 @@ class EventAdminController
                 if ($evToDelete) {
                     UploadValidator::deleteStoredFileIfUnused($evToDelete['header_logo_path'] ?? '');
                     UploadValidator::deleteStoredFileIfUnused($evToDelete['banner_image_path'] ?? '');
+                    UploadValidator::deleteStoredFileIfUnused($evToDelete['flyer_file_path'] ?? '');
                 }
                 foreach ($docFields as $df) {
                     $opt = json_decode((string)($df['options_json'] ?? ''), true);
@@ -268,6 +281,22 @@ class EventAdminController
                 $bannerImagePath = '';
             }
 
+            // Optionaler Upload eines Flyers (PDF oder Bilddatei, alternativ zur Flyer-URL)
+            $oldFlyerFile  = (string)($event['flyer_file_path'] ?? '');
+            $flyerFilePath = $oldFlyerFile;
+            if (!empty($_FILES['flyer_file']['name'])) {
+                $checkFlyer = UploadValidator::validateAndStoreFlyer($_FILES['flyer_file'], 15728640);
+                if ($checkFlyer['ok']) {
+                    $flyerFilePath = $checkFlyer['path'];
+                } else {
+                    $_SESSION['flash_error'] = 'Flyer-Upload abgelehnt: ' . $checkFlyer['error'];
+                    header('Location: admin.php?module=events&action=' . ($isNew ? 'new' : 'edit&id=' . $id));
+                    exit;
+                }
+            } elseif (isset($_POST['remove_flyer_file'])) {
+                $flyerFilePath = '';
+            }
+
             $params = [
                 'title'     => $title !== '' ? $title : 'Unbenannte Veranstaltung',
                 'subtitle'  => $subtitle,
@@ -291,6 +320,7 @@ class EventAdminController
                 'htext_de'  => $headerTextDe,
                 'htext_en'  => $headerTextEn,
                 'flyer'     => $flyerUrl,
+                'flyerfile' => $flyerFilePath,
                 'forum'     => $forumUrl,
                 'aemail'    => $adminEmail,
             ];
@@ -298,8 +328,8 @@ class EventAdminController
             if ($isNew) {
                 Database::query(
                     "INSERT INTO {$tEvents}
-                     (title, subtitle, start_date, end_date, countdown_target, show_on_index, show_countdown, location_prefix, location, location_suffix, maps_url, status, waitlist_enabled, unlock_password, is_bilingual, theme, header_mode, header_logo_path, banner_image_path, header_text_de, header_text_en, flyer_url, forum_url, admin_email)
-                     VALUES (:title, :subtitle, :sdate, :edate, :cdtarget, :sindex, :scd, :lpre, :loc, :lsuf, :maps, :status, :waitlist, :unlock, :biling, :theme, :hmode, :hlogo, :bimg, :htext_de, :htext_en, :flyer, :forum, :aemail)",
+                     (title, subtitle, start_date, end_date, countdown_target, show_on_index, show_countdown, location_prefix, location, location_suffix, maps_url, status, waitlist_enabled, unlock_password, is_bilingual, theme, header_mode, header_logo_path, banner_image_path, header_text_de, header_text_en, flyer_url, flyer_file_path, forum_url, admin_email)
+                     VALUES (:title, :subtitle, :sdate, :edate, :cdtarget, :sindex, :scd, :lpre, :loc, :lsuf, :maps, :status, :waitlist, :unlock, :biling, :theme, :hmode, :hlogo, :bimg, :htext_de, :htext_en, :flyer, :flyerfile, :forum, :aemail)",
                     $params
                 );
                 $newId = Database::lastInsertId();
@@ -320,7 +350,7 @@ class EventAdminController
                      status = :status, waitlist_enabled = :waitlist, unlock_password = :unlock, is_bilingual = :biling,
                      theme = :theme, header_mode = :hmode, header_logo_path = :hlogo, banner_image_path = :bimg,
                      header_text_de = :htext_de, header_text_en = :htext_en,
-                     flyer_url = :flyer, forum_url = :forum, admin_email = :aemail
+                     flyer_url = :flyer, flyer_file_path = :flyerfile, forum_url = :forum, admin_email = :aemail
                      WHERE id = :id",
                     $params
                 );
@@ -329,6 +359,9 @@ class EventAdminController
                 }
                 if ($oldBannerImage !== '' && $oldBannerImage !== $bannerImagePath) {
                     UploadValidator::deleteStoredFileIfUnused($oldBannerImage);
+                }
+                if ($oldFlyerFile !== '' && $oldFlyerFile !== $flyerFilePath) {
+                    UploadValidator::deleteStoredFileIfUnused($oldFlyerFile);
                 }
                 $_SESSION['flash_success'] = 'Veranstaltungseinstellungen wurden gespeichert.';
                 header("Location: admin.php?module=events&action=edit&id={$id}");
@@ -364,6 +397,7 @@ class EventAdminController
             'header_text_de'    => '',
             'header_text_en'    => '',
             'flyer_url'         => '',
+            'flyer_file_path'   => '',
             'forum_url'         => '',
             'admin_email'       => (string)Database::getSetting('mail_from_address', ''),
         ];
@@ -516,10 +550,24 @@ class EventAdminController
                         </div>
                     </div>
 
-                    <div class="grid-2">
+                    <div class="grid-3">
                         <div class="form-group">
-                            <label for="flyer_url">Link zum Flyer / Ausschreibung (optional)</label>
+                            <label for="flyer_file">Flyer / Ausschreibung hochladen (PDF oder Bild – optional)</label>
+                            <input type="file" id="flyer_file" name="flyer_file" accept=".pdf,.jpg,.jpeg,.png,.webp">
+                            <div class="help-text">Erlaubt: PDF, JPG, PNG, WEBP &middot; Max. 15 MB. Hat Vorrang vor einer externen Flyer-URL.</div>
+                            <?php if (!empty($ev['flyer_file_path'])): ?>
+                                <div style="margin-top:0.45rem;display:flex;align-items:center;gap:0.85rem;flex-wrap:wrap;font-size:0.84rem;">
+                                    <a href="<?= e($ev['flyer_file_path']) ?>" target="_blank" rel="noopener">📄 <?= e(basename((string)$ev['flyer_file_path'])) ?></a>
+                                    <label style="font-weight:400;margin:0;">
+                                        <input type="checkbox" name="remove_flyer_file" value="1"> Datei entfernen
+                                    </label>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                        <div class="form-group">
+                            <label for="flyer_url">Alternativ: Externe URL zum Flyer (optional)</label>
                             <input type="url" id="flyer_url" name="flyer_url" value="<?= e($ev['flyer_url']) ?>" placeholder="https://...">
+                            <div class="help-text">Wird genutzt, falls links keine eigene Datei hochgeladen wurde.</div>
                         </div>
                         <div class="form-group">
                             <label for="forum_url">Link zum Veranstaltungs-Forum (optional)</label>

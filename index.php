@@ -126,8 +126,11 @@ $renderEventCard = function (array $ev): void {
                 </span>
             <?php endif; ?>
 
-            <?php if (!empty($ev['flyer_url'])): ?>
-                <a href="<?= e($ev['flyer_url']) ?>" target="_blank" rel="noopener" class="btn btn-secondary">
+            <?php
+            $effectiveFlyer = !empty($ev['flyer_file_path']) ? (string)$ev['flyer_file_path'] : (string)($ev['flyer_url'] ?? '');
+            if ($effectiveFlyer !== ''):
+            ?>
+                <a href="<?= e($effectiveFlyer) ?>" target="_blank" rel="noopener" class="btn btn-secondary">
                     📄 <?= e(I18n::t('index.to_flyer')) ?>
                 </a>
             <?php endif; ?>

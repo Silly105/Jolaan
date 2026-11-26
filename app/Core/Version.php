@@ -5,7 +5,7 @@ namespace App\Core;
 
 class Version
 {
-    public const CURRENT = '0.9.010';
+    public const CURRENT = '0.9.011';
 
     /**
      * Fortlaufende Änderungshistorie & Migrations-Schritte.
@@ -140,6 +140,16 @@ class Version
                     'Hilfe & Handbuch komplett für den stressfreien Con-Alltag neu aufgebaut (aufklappbare Schritt-für-Schritt-Anleitungen + Trennung SL / Admin)',
                     'Installer legt fehlende Schutzdateien (.htaccess) und Ordner automatisch an, schreibt config.php erst nach komplettem Abschluss und README.md wurde als laienfreundliche Komplettanleitung aktualisiert',
                     'Sprachauswahl-Buttons (DE/EN) beim zentrierten Banner-Header und Hero-Header auch auf dem Desktop sauber zentriert unterhalb der Header-Grafik platziert',
+                ],
+            ],
+            '0.9.011' => [
+                'date'    => '2026-11-26',
+                'title'   => 'Rundmail-Modul (Systemversand & 50er-BCC-Übergabe), Flyer-Upload & Kompakte Veranstaltungsübersicht',
+                'changes' => [
+                    'Neue Veranstaltungs-Seite „Rundmail“ (für Admin & SL): Empfängerfilter, Vorab-Testmail, schonender System-Massenversand in 5er-Paketen mit Fortschrittsbalken sowie Fallback mit 50er-BCC-Bündeln per mailto:-Link und Kopierfeldern',
+                    'Alternativer Flyer-Upload in den Con-Einstellungen: Wahlweise externe URL oder direkter Datei-Upload (PDF, JPG, PNG, WEBP)',
+                    'Tabellen-Layout der Veranstaltungsübersicht optimiert (zweizeiliges Datum, verkürzte Spaltenköpfe „Status“ & „Anmeldungen“ sowie mehrzeilig umbrechende Aktions-Buttons ohne horizontales Scrollen)',
+                    'Hilfe & Handbuch sowie README.md um Rundmail-Versand und Flyer-Upload ergänzt',
                 ],
             ],
         ];

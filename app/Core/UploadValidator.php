@@ -77,6 +77,57 @@ class UploadValidator
     }
 
     /**
+     * Prüft einen Flyer-Upload (PDF oder Bilddatei JPG/PNG/WEBP bis standardmäßig 15 MB) und speichert ihn unter storage/uploads/.
+     */
+    public static function validateAndStoreFlyer(array $file, int $maxBytes = 15728640): array
+    {
+        if (empty($file['name']) || ($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) {
+            return ['ok' => false, 'error' => 'Keine Datei ausgewählt.'];
+        }
+        if (($file['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
+            return ['ok' => false, 'error' => 'Fehler beim Flyer-Upload (Code ' . (int)$file['error'] . ').'];
+        }
+
+        $size = (int)($file['size'] ?? 0);
+        if ($size <= 0 || $size > $maxBytes) {
+            $maxMb = round($maxBytes / 1048576, 1);
+            return ['ok' => false, 'error' => "Die Flyer-Datei ist zu groß (maximal {$maxMb} MB erlaubt)."];
+        }
+
+        $allowed = ['pdf', 'jpg', 'jpeg', 'png', 'webp'];
+        $ext = strtolower(pathinfo((string)$file['name'], PATHINFO_EXTENSION));
+        if (!in_array($ext, $allowed, true)) {
+            return ['ok' => false, 'error' => 'Ungültiges Dateiformat für den Flyer. Erlaubt sind: PDF, JPG, PNG, WEBP.'];
+        }
+
+        $tmpPath = (string)$file['tmp_name'];
+        if ($ext === 'pdf') {
+            $head = (string)@file_get_contents($tmpPath, false, null, 0, 5);
+            if ($head !== '%PDF-') {
+                return ['ok' => false, 'error' => 'Die hochgeladene Datei ist kein gültiges PDF-Dokument.'];
+            }
+        } else {
+            if (@getimagesize($tmpPath) === false) {
+                return ['ok' => false, 'error' => 'Die hochgeladene Datei ist kein gültiges Bild.'];
+            }
+        }
+
+        $fileName = 'flyer_' . time() . '_' . bin2hex(random_bytes(4)) . '.' . $ext;
+        $destDir  = dirname(__DIR__, 2) . '/storage/uploads';
+        if (!is_dir($destDir)) {
+            @mkdir($destDir, 0755, true);
+        }
+        if (!move_uploaded_file($tmpPath, $destDir . '/' . $fileName)) {
+            return ['ok' => false, 'error' => 'Flyer konnte nicht im Upload-Verzeichnis gespeichert werden.'];
+        }
+
+        return [
+            'ok'   => true,
+            'path' => 'storage/uploads/' . $fileName,
+        ];
+    }
+
+    /**
      * Löscht eine nicht mehr referenzierte Datei sicher aus storage/uploads/.
      */
     public static function deleteStoredFileIfUnused(?string $relativePath): void
@@ -99,8 +150,8 @@ class UploadValidator
             $tSettings = Database::table('settings');
 
             $inEvents = (int)Database::fetchScalar(
-                "SELECT COUNT(*) FROM {$tEvents} WHERE header_logo_path = :p1 OR banner_image_path = :p2",
-                ['p1' => $normalized, 'p2' => $normalized]
+                "SELECT COUNT(*) FROM {$tEvents} WHERE header_logo_path = :p1 OR banner_image_path = :p2 OR flyer_file_path = :p3",
+                ['p1' => $normalized, 'p2' => $normalized, 'p3' => $normalized]
             );
             $inSettings = (int)Database::fetchScalar(
                 "SELECT COUNT(*) FROM {$tSettings} WHERE setting_value = :p",

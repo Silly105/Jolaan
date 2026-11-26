@@ -187,6 +187,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $allChecksOk) {
                     `header_text_de` TEXT NULL,
                     `header_text_en` TEXT NULL,
                     `flyer_url` VARCHAR(500) NOT NULL DEFAULT '',
+                    `flyer_file_path` VARCHAR(255) NOT NULL DEFAULT '',
                     `forum_url` VARCHAR(500) NOT NULL DEFAULT '',
                     `admin_email` VARCHAR(190) NOT NULL DEFAULT '',
                     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
