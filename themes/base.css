@@ -95,13 +95,19 @@ a:hover {
     display: block;
 }
 
+.header-controls:empty {
+    display: none;
+}
+
 /* Header-Modus 2: Zentrierter Wappen- / Banner-Header */
 body.header-mode-centered .header-inner {
     flex-direction: column;
+    align-items: center;
     justify-content: center;
     text-align: center;
     padding-top: 1.65rem;
-    padding-bottom: 1.4rem;
+    padding-bottom: 1.35rem;
+    gap: 0.75rem;
 }
 
 body.header-mode-centered .brand-link {
@@ -123,9 +129,7 @@ body.header-mode-centered .brand-subtitle {
 }
 
 body.header-mode-centered .header-controls {
-    position: absolute;
-    top: 1rem;
-    right: 1.25rem;
+    position: static;
 }
 
 body.header-mode-centered .nav-inner {
@@ -146,10 +150,12 @@ body.header-mode-hero .header-atmosphere {
 
 body.header-mode-hero .header-inner {
     flex-direction: column;
+    align-items: center;
     justify-content: center;
     text-align: center;
-    padding-top: 2.75rem;
-    padding-bottom: 2.45rem;
+    padding-top: 2.65rem;
+    padding-bottom: 2.25rem;
+    gap: 0.9rem;
 }
 
 body.header-mode-hero .brand-link {
@@ -175,9 +181,7 @@ body.header-mode-hero .brand-subtitle {
 }
 
 body.header-mode-hero .header-controls {
-    position: absolute;
-    top: 1.1rem;
-    right: 1.25rem;
+    position: static;
 }
 
 body.header-mode-hero .nav-inner {
