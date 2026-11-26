@@ -102,7 +102,7 @@ $bannerImage = $bannerImage ?? '';
 
     <footer class="site-footer">
         <div class="container footer-inner">
-            <span>&copy; <?= date('Y') ?> <?= e($siteTitle) ?></span>
+            <span class="footer-credit">&copy; 2026 J. Gerhard &middot; <?= e(\App\Core\Version::LICENSE) ?></span>
             <span class="footer-links">
                 <?php if ($privacyUrl !== ''): ?>
                     <a href="<?= e($privacyUrl) ?>"><?= e(I18n::t('nav.privacy')) ?></a>
@@ -111,9 +111,6 @@ $bannerImage = $bannerImage ?? '';
                     <a href="<?= e($imprintUrl) ?>"><?= e(I18n::t('nav.imprint')) ?></a>
                 <?php endif; ?>
             </span>
-        </div>
-        <div class="container footer-credit">
-            <?= e(\App\Core\Version::COPYRIGHT) ?> &middot; <?= e(\App\Core\Version::LICENSE) ?>
         </div>
     </footer>
 </body>

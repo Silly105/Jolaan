@@ -550,6 +550,8 @@ class SettingsController
                 }
             } elseif ($subAction === 'update_user') {
                 $uid   = (int)($_POST['user_id'] ?? 0);
+                $name  = trim((string)($_POST['name'] ?? ''));
+                $email = trim((string)($_POST['email'] ?? ''));
                 $role  = ($_POST['role'] ?? 'orga') === 'admin' ? 'admin' : 'orga';
                 $act   = isset($_POST['is_active']) ? 1 : 0;
                 $newPw = trim((string)($_POST['reset_user_password'] ?? ''));
@@ -560,11 +562,47 @@ class SettingsController
                     $act  = 1;
                 }
 
-                Database::query("UPDATE {$tUsers} SET role = :role, is_active = :act WHERE id = :id", ['role' => $role, 'act' => $act, 'id' => $uid]);
-                if ($newPw !== '' && strlen($newPw) >= 8) {
-                    Database::query("UPDATE {$tUsers} SET password_hash = :hash WHERE id = :id", ['hash' => password_hash($newPw, PASSWORD_DEFAULT), 'id' => $uid]);
+                if ($uid <= 0 || $name === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    $_SESSION['flash_error'] = 'Bitte gib einen gültigen Namen und eine gültige E-Mail-Adresse an.';
+                } elseif ($newPw !== '' && strlen($newPw) < 8) {
+                    $_SESSION['flash_error'] = 'Ein neues Passwort muss mindestens 8 Zeichen lang sein.';
+                } else {
+                    $dup = Database::fetchOne(
+                        "SELECT id FROM {$tUsers} WHERE email = :email AND id != :id LIMIT 1",
+                        ['email' => $email, 'id' => $uid]
+                    );
+                    if ($dup) {
+                        $_SESSION['flash_error'] = 'Diese E-Mail-Adresse wird bereits von einem anderen Benutzerkonto verwendet.';
+                    } else {
+                        Database::query(
+                            "UPDATE {$tUsers} SET name = :name, email = :email, role = :role, is_active = :act WHERE id = :id",
+                            ['name' => $name, 'email' => $email, 'role' => $role, 'act' => $act, 'id' => $uid]
+                        );
+                        if ($newPw !== '') {
+                            Database::query(
+                                "UPDATE {$tUsers} SET password_hash = :hash WHERE id = :id",
+                                ['hash' => password_hash($newPw, PASSWORD_DEFAULT), 'id' => $uid]
+                            );
+                        }
+                        $_SESSION['flash_success'] = "Benutzer „{$name}“ wurde aktualisiert.";
+                    }
                 }
-                $_SESSION['flash_success'] = 'Benutzer wurde aktualisiert.';
+            } elseif ($subAction === 'delete_user') {
+                $uid         = (int)($_POST['user_id'] ?? 0);
+                $currentUser = Auth::user();
+
+                if ($currentUser && $uid === (int)$currentUser['id']) {
+                    $_SESSION['flash_error'] = 'Du kannst dein eigenes aktuell angemeldetes Konto nicht löschen.';
+                } elseif ($uid > 0) {
+                    $target = Database::fetchOne(
+                        "SELECT id, name, email FROM {$tUsers} WHERE id = :id LIMIT 1",
+                        ['id' => $uid]
+                    );
+                    if ($target) {
+                        Database::query("DELETE FROM {$tUsers} WHERE id = :id", ['id' => $uid]);
+                        $_SESSION['flash_success'] = "Benutzer „{$target['name']}“ ({$target['email']}) wurde gelöscht.";
+                    }
+                }
             }
 
             header('Location: admin.php?module=users');
@@ -576,60 +614,110 @@ class SettingsController
 
         ob_start();
         ?>
+        <style>
+            .users-table th, .users-table td {
+                padding: 0.55rem 0.5rem;
+                vertical-align: middle;
+            }
+            .users-table input[type="text"],
+            .users-table input[type="email"],
+            .users-table input[type="password"],
+            .users-table select {
+                padding: 0.38rem 0.5rem;
+                font-size: 0.86rem;
+            }
+            .user-row-actions {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.35rem;
+                align-items: center;
+            }
+        </style>
         <div class="card">
             <div class="card-header"><h2>SL- & Administrator-Konten</h2></div>
             <div class="card-body table-responsive">
                 <p style="margin-top:0;font-size:0.88rem;color:#475569;">
                     <strong>Rollen-Konzept</strong> –
                     <code>Admin</code> hat Vollzugriff (Cons, Abfragefelder, DSGVO-Center, Seiteneinstellungen).
-                    <code>SL</code> kann sich im Backend anmelden, Anmeldeverwaltung, Verfügbare Plätze sowie Listen/Filter/Druckansichten einsehen und bearbeiten.
+                    <code>SL</code> kann sich im Backend anmelden sowie Anmeldeverwaltung, Verfügbare Plätze, Listen/Druckansichten und Rundmails nutzen.
                 </p>
-                <table class="data-table">
+
+                <?php foreach ($users as $u):
+                    $uid = (int)$u['id'];
+                ?>
+                    <form id="uform_<?= $uid ?>" method="post" action="admin.php?module=users" autocomplete="off" style="display:none;">
+                        <?= Auth::csrfField() ?>
+                        <input type="hidden" name="user_id" value="<?= $uid ?>">
+                        <input type="text" name="prevent_autofill_user" tabindex="-1" autocomplete="username">
+                        <input type="password" name="prevent_autofill_pass" tabindex="-1" autocomplete="current-password">
+                    </form>
+                <?php endforeach; ?>
+
+                <table class="data-table users-table">
                     <thead>
                         <tr>
                             <th>Name</th>
                             <th>E-Mail</th>
                             <th>Rolle</th>
-                            <th>2FA-Schutz</th>
+                            <th>2FA</th>
                             <th>Aktiv</th>
-                            <th>Neues Passwort setzen (optional)</th>
+                            <th>Neues Passwort</th>
                             <th>Aktionen</th>
                         </tr>
                     </thead>
                     <tbody>
                         <?php foreach ($users as $u):
-                            $uid = (int)$u['id'];
+                            $uid  = (int)$u['id'];
+                            $fRef = 'uform_' . $uid;
                         ?>
                             <tr>
-                                <form method="post" action="admin.php?module=users" autocomplete="off">
-                                    <?= Auth::csrfField() ?>
-                                    <input type="hidden" name="sub_action" value="update_user">
-                                    <input type="hidden" name="user_id" value="<?= $uid ?>">
-                                    <td><strong><?= e($u['name']) ?></strong> <?= $uid === $meId ? '<span class="badge badge-blue">Du</span>' : '' ?></td>
-                                    <td><?= e($u['email']) ?></td>
-                                    <td>
-                                        <select name="role" <?= $uid === $meId ? 'disabled' : '' ?>>
-                                            <option value="admin" <?= $u['role'] === 'admin' ? 'selected' : '' ?>>Administrator</option>
-                                            <option value="orga" <?= $u['role'] === 'orga' ? 'selected' : '' ?>>SL</option>
-                                        </select>
-                                    </td>
-                                    <td>
-                                        <?php if ((int)($u['totp_enabled'] ?? 0) === 1): ?>
-                                            <span class="badge badge-green" title="Geschützt durch TOTP + persönliche Notfallcodes">🔐 2FA aktiv</span>
-                                        <?php else: ?>
-                                            <span class="badge badge-gray">Aus</span>
+                                <td style="min-width:135px;">
+                                    <div style="display:flex;align-items:center;gap:0.35rem;">
+                                        <input type="text" form="<?= $fRef ?>" name="name" value="<?= e($u['name']) ?>" required>
+                                        <?php if ($uid === $meId): ?>
+                                            <span class="badge badge-blue" title="Dein aktuell angemeldetes Konto">Du</span>
                                         <?php endif; ?>
-                                    </td>
-                                    <td style="text-align:center;">
-                                        <input type="checkbox" name="is_active" value="1" <?= (int)$u['is_active'] === 1 ? 'checked' : '' ?> <?= $uid === $meId ? 'disabled' : '' ?>>
-                                    </td>
-                                    <td>
-                                        <input type="password" name="reset_user_password" placeholder="Mind. 8 Zeichen (leer = unverändert)" autocomplete="new-password">
-                                    </td>
-                                    <td style="white-space:nowrap;">
-                                        <button type="submit" class="btn btn-primary btn-sm">💾 Speichern</button>
-                                    </td>
-                                </form>
+                                    </div>
+                                </td>
+                                <td style="min-width:175px;">
+                                    <input type="email" form="<?= $fRef ?>" name="email" value="<?= e($u['email']) ?>" required>
+                                </td>
+                                <td style="min-width:120px;">
+                                    <select form="<?= $fRef ?>" name="role" <?= $uid === $meId ? 'disabled' : '' ?>>
+                                        <option value="admin" <?= $u['role'] === 'admin' ? 'selected' : '' ?>>Administrator</option>
+                                        <option value="orga" <?= $u['role'] === 'orga' ? 'selected' : '' ?>>SL</option>
+                                    </select>
+                                </td>
+                                <td style="white-space:nowrap;">
+                                    <?php if ((int)($u['totp_enabled'] ?? 0) === 1): ?>
+                                        <span class="badge badge-green" title="Geschützt durch TOTP + persönliche Notfallcodes">2FA aktiv</span>
+                                    <?php else: ?>
+                                        <span class="badge badge-gray">Aus</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td style="text-align:center;">
+                                    <input type="checkbox" form="<?= $fRef ?>" name="is_active" value="1" <?= (int)$u['is_active'] === 1 ? 'checked' : '' ?> <?= $uid === $meId ? 'disabled' : '' ?> style="width:auto;">
+                                </td>
+                                <td style="min-width:145px;">
+                                    <input type="password" form="<?= $fRef ?>" name="reset_user_password" placeholder="Leer = unverändert" minlength="8" autocomplete="new-password">
+                                </td>
+                                <td>
+                                    <div class="user-row-actions">
+                                        <button type="submit" form="<?= $fRef ?>" name="sub_action" value="update_user" class="btn btn-primary btn-sm">💾 Speichern</button>
+                                        <?php if ($uid !== $meId): ?>
+                                            <button type="submit"
+                                                    form="<?= $fRef ?>"
+                                                    name="sub_action"
+                                                    value="delete_user"
+                                                    formnovalidate
+                                                    class="btn btn-danger btn-sm"
+                                                    title="Benutzerkonto löschen"
+                                                    onclick="return confirm(<?= e(json_encode('Benutzerkonto „' . $u['name'] . '“ (' . $u['email'] . ') wirklich endgültig löschen?')) ?>);">
+                                                🗑️ Löschen
+                                            </button>
+                                        <?php endif; ?>
+                                    </div>
+                                </td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>

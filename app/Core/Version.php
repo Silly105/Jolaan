@@ -5,7 +5,7 @@ namespace App\Core;
 
 class Version
 {
-    public const CURRENT   = '1.0.0';
+    public const CURRENT   = '1.0.1';
     public const COPYRIGHT = '(C) 2026 J. Gerhard';
     public const LICENSE   = 'GPL-3.0';
 
@@ -26,6 +26,14 @@ class Version
                     'Anmeldeverwaltung mit Zahlungsabgleich, Protokollverlauf, Listen-Generator (inkl. U18-Stichtagsprüfung, Druck & CSV) sowie Rundmail-Modul (Systemversand & 50er-BCC-Pakete)',
                     '14 enthaltene Themes (6 schlichte Farb-Themes & 8 Genre-Themes) mit 3 Header-Modi, Logo-, Banner- und Flyer-Upload',
                     'Zweistufige AES-256-GCM-Verschlüsselung, DSGVO-Center, lokale TOTP-Zwei-Faktor-Authentifizierung mit nativem QR-Code und Brute-Force-Schutz',
+                ],
+            ],
+            '1.0.1' => [
+                'date'    => '2026-11-27',
+                'title'   => 'Benutzerverwaltung erweitert & Footer-Anpassung',
+                'changes' => [
+                    'Unter „Benutzer & Rollen“ können bestehende Konten nun vollständig bearbeitet (inkl. Name & E-Mail-Adresse) sowie gelöscht werden',
+                    'Frontend-Footer verschlankt: Dezenter Lizenz- und Urhebervermerk links unten statt doppelter Namenszeile',
                 ],
             ],
         ];
